@@ -1,0 +1,7 @@
+services:
+  frontend:
+    build: .
+    container_name: carcacity-frontend
+    ports:
+      - "54321:80"
+    restart: always
