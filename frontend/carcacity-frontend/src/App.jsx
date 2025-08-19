@@ -115,7 +115,6 @@ const App = () => {
   const handleExit = () => {
     socket.emit("leave");
     localStorage.removeItem("playerName");
-    localStorage.removeItem("sessionID");
     setCurrentName("");
     setScreen("splash");
   };

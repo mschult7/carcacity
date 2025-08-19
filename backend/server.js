@@ -106,6 +106,10 @@ io.on('connection', (socket) => {
         for (let col = 0; col < BOARD_SIZE; col++) {
           if (board[row][col].player === clientId) {
             board[row][col] = { player: null, index: null, sequence: board[row][col].sequence, enabled: board[row][col].enabled };
+            disableIfValid(row + 1, col);
+            disableIfValid(row - 1, col);
+            disableIfValid(row, col + 1);
+            disableIfValid(row, col - 1);
           }
         }
       }
@@ -139,6 +143,7 @@ io.on('connection', (socket) => {
 
   socket.on('clickTile', ({ row, col, player, index }) => {
     // Only update if empty
+    if (!player) return;
     if (!board[row][col].player) {
       console.log(`Tile Clicked: [${row}, ${col}] ${player}`);
       board[row][col] = { player, index, enabled: false, sequence: sequence };
@@ -175,6 +180,13 @@ function enableIfValid(r, c) {
   if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
     if (board[r][c].sequence === null) {
       board[r][c].enabled = true;
+    }
+  }
+}
+function disableIfValid(r, c) {
+  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+    if (board[r][c].sequence === null) {
+      board[r][c].enabled = false;
     }
   }
 }
