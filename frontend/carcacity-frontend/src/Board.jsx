@@ -11,9 +11,14 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
 
   useImperativeHandle(ref, () => ({
     recenterBoard: () => {
-      // Center the board in the container
-      const offsetX = (containerWidth - boardPixelSize * scale) / 2;
-      const offsetY = (containerHeight - boardPixelSize * scale) / 2;
+      // Center tile (44,44) in the viewport
+      // Each tile is 50px with 2px gaps, so tile (44,44) is at position:
+      // x = 44 * 50 + 44 * 2 = 2288px from left edge
+      // y = 44 * 50 + 44 * 2 = 2288px from top edge
+      // Center of tile is at 2288 + 25 = 2313px
+      const tile44Position = 44 * 50 + 44 * 2 + 25; // 2313px
+      const offsetX = containerWidth / 2 - tile44Position;
+      const offsetY = containerHeight / 2 - tile44Position;
       setOffset({ x: offsetX, y: offsetY });
       setScale(1);
     }
@@ -92,14 +97,6 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
   const handleTouchEnd = () => {
     touchData.current.lastTouchDistance = null;
   };
-
-  // Expose recenterBoard method to parent via ref
-  useImperativeHandle(ref, () => ({
-    recenterBoard: () => {
-      setOffset({ x: 0, y: 0 });
-      setScale(1);
-    }
-  }));
 
   const claimTile = (row, col) => {
     // Only claim if enabled
