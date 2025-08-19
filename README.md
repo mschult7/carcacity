@@ -42,8 +42,8 @@ A real-time multiplayer tile-based board game built with React and Node.js. Play
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/mschult7/carcacity2.git
-   cd carcacity2
+   git clone https://github.com/mschult7/carcacity.git
+   cd carcacity
    ```
 
 2. **Start the Backend Server**
@@ -196,7 +196,7 @@ export default defineConfig({
 
 ### Project Structure
 ```
-carcacity2/
+carcacity/
 ├── backend/
 │   ├── server.js          # Main server file
 │   ├── package.json       # Backend dependencies
