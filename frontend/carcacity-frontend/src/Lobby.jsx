@@ -10,7 +10,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
   }, [currentName]);
 
   const isJoined = currentName && players.some(u => u.name === currentName);
-  const canJoin = currentName  && (players.length > 0 );
+  const canJoin = currentName && (players.length > 0);
   const canEnterName = name && (players.length < 5 || (isJoined && name === currentName));
 
   return (
@@ -164,6 +164,21 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
           gap: '1rem',
         }}
       >
+        {/* Close Button */}
+        <button
+          onClick={() => setSettingsOpen(false)}
+          style={{
+            alignSelf: 'flex-end',
+            background: 'transparent',
+            border: 'none',
+            color: '#fff',
+            fontSize: '1.5rem',
+            cursor: 'pointer',
+          }}
+        >
+          ✖
+        </button>
+
         <h3 style={{ color: '#3b9774', margin: 0 }}>Settings</h3>
         <button
           style={{

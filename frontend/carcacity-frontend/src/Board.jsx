@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { socket } from './socket';
 
-const Board = ({ size = 8, currentPlayer, players }) => {
+const Board = ({ size = 8, clientID, currentPlayer, players }) => {
   const [tiles, setTiles] = useState(
     Array(size)
       .fill(null)
@@ -21,7 +21,7 @@ const Board = ({ size = 8, currentPlayer, players }) => {
   const playerColors = {};
   const defaultColors = ['#3b9774', '#e67e22', '#8e44ad', '#f1c40f', '#3498db'];
   players.forEach((p, idx) => {
-    playerColors[p.name] = defaultColors[idx % defaultColors.length];
+    playerColors[p.clientId] = defaultColors[idx % defaultColors.length];
   });
 
   useEffect(() => {
@@ -93,10 +93,15 @@ const Board = ({ size = 8, currentPlayer, players }) => {
 
   const claimTile = (row, col) => {
     if (!tiles[row][col].player) {
-      socket.emit('clickTile', { row, col, player: currentPlayer });
+      // Find the index of the current player based on their position in the players array
+      const playerIndex = players.findIndex((p) => p.clientId === clientID);
+      // Emit the player's index alongside their clientId
+      socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
+
+      // Update local state to reflect the claimed tile
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));
-        newTiles[row][col].player = currentPlayer;
+        newTiles[row][col] = { player: clientID, index: playerIndex }; // Include index
         return newTiles;
       });
     }

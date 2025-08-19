@@ -2,7 +2,7 @@ import React from 'react';
 import Board from './Board.jsx';
 import { motion } from "framer-motion";
 
-const GameScreen = ({ playerName, players, onLobby, onExit }) => {
+const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
   return (
     <div
       style={{
@@ -32,7 +32,7 @@ const GameScreen = ({ playerName, players, onLobby, onExit }) => {
         </div>
       </div>
 
-      <Board size={8} currentPlayer={playerName} players={players} />
+      <Board size={8} clientID={clientID} currentPlayer={playerName} players={players} />
 
 
       {/* Example UI Overlay */}

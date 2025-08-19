@@ -14,7 +14,9 @@ const users = {};
 const BOARD_SIZE = 8;
 let board = Array(BOARD_SIZE)
   .fill(null)
-  .map(() => Array(BOARD_SIZE).fill({ player: null }));
+  .map(() =>
+    Array(BOARD_SIZE).fill({ player: null, index: null })
+  );
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
@@ -67,7 +69,6 @@ io.on('connection', (socket) => {
     }
   });
 
-
   // Update page (lobby or game)
   socket.on('updatePage', (page) => {
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
@@ -78,11 +79,9 @@ io.on('connection', (socket) => {
     }
   });
 
-
   // Send current users list
   socket.on('list', () => {
     socket.emit('users', Object.values(users));
-    //console.log(`Users list sent: ${Object.values(users).map(u => `${u.name}(${u.page})${u.connected}`).join(', ')}`);
   });
 
   // Remove a user
@@ -105,7 +104,6 @@ io.on('connection', (socket) => {
     }
   });
 
-
   // Clear all users (for testing)
   socket.on('clearAll', () => {
     for (const sockId of Object.keys(io.sockets.sockets)) {
@@ -119,30 +117,31 @@ io.on('connection', (socket) => {
     console.log('All users cleared.');
   });
 
-  socket.on('clickTile', ({ row, col, player }) => {
+  socket.on('clickTile', ({ row, col, player, index }) => {
     // Only update if empty
     if (!board[row][col].player) {
-      board[row][col] = { player };
+      board[row][col] = { player, index };
       // Broadcast updated board to all clients
       io.emit('boardUpdate', board);
     }
   });
+
   socket.on('getBoard', () => {
     io.emit('boardUpdate', board);
   });
+
   socket.on('clearBoard', () => {
-  board = Array(BOARD_SIZE)
-    .fill(null)
-    .map(() =>
-      Array(BOARD_SIZE)
-        .fill(null)
-        .map(() => ({ player: null })) // NEW object per tile
-    );
+    board = Array(BOARD_SIZE)
+      .fill(null)
+      .map(() =>
+        Array(BOARD_SIZE)
+          .fill(null)
+          .map(() => ({ player: null, index: null })) // Initialize `index` as well
+      );
 
-  io.emit('boardUpdate', board);
-  console.log('Board cleared');
-});
-
+    io.emit('boardUpdate', board);
+    console.log('Board cleared');
+  });
 
   // Send current board on new connection
   socket.emit('boardUpdate', board);

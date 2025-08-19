@@ -28,7 +28,7 @@ const App = () => {
   useEffect(() => {
     const handleUsers = (userList) => {
       setPlayers(userList);
-
+      socket.emit("getBoard");
       if (clientId) {
         const me = userList.find((u) => u.clientId === clientId);
 
@@ -40,7 +40,7 @@ const App = () => {
           // // If not found, clear stored name and go back to splash
           // localStorage.removeItem("playerName");
           // setCurrentName("");
-           setScreen("lobby");
+          setScreen("lobby");
         }
       }
     };
@@ -70,6 +70,7 @@ const App = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       socket.emit("list");
+      socket.emit("getBoard");
     }, 5000);
 
     return () => clearInterval(interval); // cleanup interval on unmount
@@ -146,6 +147,7 @@ const App = () => {
       )}
       {screen === "game" && (
         <GameScreen
+          clientID={clientId}
           playerName={currentName}
           players={players}
           onLobby={handleLobby}
