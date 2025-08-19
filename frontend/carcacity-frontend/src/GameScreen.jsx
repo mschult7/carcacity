@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import Board from './Board.jsx';
 import { motion } from "framer-motion";
 
@@ -16,14 +16,43 @@ const getBoardContainerStyle = () => ({
   margin: 'auto',
 });
 
+const userSelectNoneStyle = {
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
+  msUserSelect: 'none',
+  MozUserSelect: 'none',
+};
+
 const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
   const boardRef = useRef();
+  const [uiMinimized, setUiMinimized] = useState(false);
+
+  // For measuring container size for centering board
+  const boardContainerRef = useRef();
+  const [containerSize, setContainerSize] = useState({ width: 500, height: 500 });
+
+  useEffect(() => {
+    // Measure container size on mount and when window resizes
+    const updateSize = () => {
+      if (boardContainerRef.current) {
+        setContainerSize({
+          width: boardContainerRef.current.offsetWidth,
+          height: boardContainerRef.current.offsetHeight,
+        });
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   const handleRecenter = () => {
     if (boardRef.current && boardRef.current.recenterBoard) {
       boardRef.current.recenterBoard();
     }
   };
+  const handleMinimize = () => setUiMinimized(true);
+  const handleRestore = () => setUiMinimized(false);
 
   return (
     <div
@@ -39,7 +68,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
         overflow: 'hidden',
       }}
     >
-      {/* UI Overlay */}
+     {/* UI Overlay */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -55,6 +84,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
           justifyContent: 'space-between',
           alignItems: 'flex-start',
           pointerEvents: 'none',
+          ...userSelectNoneStyle,
         }}
       >
         {/* Exit Button */}
@@ -69,14 +99,15 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
             color: '#fff',
             border: 'none',
             borderRadius: '5px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            ...userSelectNoneStyle,
           }}
           onClick={onLobby}
         >
           X
         </button>
 
-        {/* Player List & Recenter */}
+        {/* Player List & Recenter & Minimize */}
         <div
           style={{
             pointerEvents: 'auto',
@@ -84,52 +115,96 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
             marginTop: '1rem',
             background: 'rgba(0,0,0,0.7)',
             borderRadius: '8px',
-            padding: '0.75rem 1rem',
-            minWidth: '180px',
+            padding: uiMinimized ? '0.5rem 0.7rem' : '0.75rem 1rem',
+            minWidth: uiMinimized ? 'auto' : '180px',
             textAlign: 'left',
             boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+            ...userSelectNoneStyle,
+            transition: 'padding 0.2s, min-width 0.2s',
           }}
         >
-          <div>
-            <strong>You:</strong> {playerName}
-          </div>
-          <div>
-            <strong>Players:</strong>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {players.map((p, idx) => (
-                <li key={idx}>
-                  {p.name} {p.page && <span style={{ color: '#3b9774' }}>({p.page})</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <button
-            style={{
-              marginTop: '0.75rem',
-              padding: '0.4rem 1rem',
-              fontSize: '0.95rem',
-              background: '#3b9774',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              width: '100%',
-            }}
-            onClick={handleRecenter}
-          >
-            Recenter
-          </button>
+          {!uiMinimized ? (
+            <>
+              <div>
+                <strong>You:</strong> {playerName}
+              </div>
+              <div>
+                <strong>Players:</strong>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {players.map((p, idx) => (
+                    <li key={idx}>
+                      {p.name} {p.page && <span style={{ color: '#3b9774' }}>({p.page})</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '0.4rem 1rem',
+                  fontSize: '0.95rem',
+                  background: '#3b9774',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  width: '100%',
+                  ...userSelectNoneStyle,
+                }}
+                onClick={handleRecenter}
+              >
+                Recenter
+              </button>
+              <button
+                style={{
+                  marginTop: '0.6rem',
+                  padding: '0.2rem 0.7rem',
+                  fontSize: '0.85rem',
+                  background: '#222',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  float: 'right',
+                  ...userSelectNoneStyle,
+                }}
+                title="Minimize overlay"
+                onClick={handleMinimize}
+              >
+                &#8211;
+              </button>
+            </>
+          ) : (
+            <button
+              style={{
+                padding: '0.2rem 0.7rem',
+                fontSize: '1.2rem',
+                background: '#222',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                ...userSelectNoneStyle,
+              }}
+              title="Restore overlay"
+              onClick={handleRestore}
+            >
+              &#x25A1;
+            </button>
+          )}
         </div>
       </motion.div>
 
       {/* Board Container - Always Square, fills available space */}
-      <div style={getBoardContainerStyle()}>
+      <div ref={boardContainerRef} style={getBoardContainerStyle()}>
         <Board
           ref={boardRef}
-          size={9}
+          size={99}
           clientID={clientID}
           currentPlayer={playerName}
           players={players}
+          containerWidth={containerSize.width}
+          containerHeight={containerSize.height}
         />
       </div>
     </div>

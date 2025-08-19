@@ -11,13 +11,14 @@ const io = new Server(server, {
 
 // Map clientId -> { name, socketId, page, connected }
 const users = {};
-const BOARD_SIZE = 9;
+const BOARD_SIZE = 99;
 let sequence = 0;
 let board = Array(BOARD_SIZE)
   .fill(null)
   .map(() =>
     Array(BOARD_SIZE).fill({ player: null, index: null, enabled: false, sequence: null })
   );
+clearBoard();
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
@@ -143,22 +144,16 @@ io.on('connection', (socket) => {
       board[row][col] = { player, index, enabled: false, sequence: sequence };
       // Broadcast updated board to all clients
       sequence = sequence + 1;
-      // Helper to safely enable a tile if within bounds
-    function enableIfValid(r, c) {
-      if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-        board[r][c].enabled = true;
-      }
-    }
 
-    // Enable adjacent tiles if within bounds
-    enableIfValid(row + 1, col);
-    enableIfValid(row - 1, col);
-    enableIfValid(row + 1, col + 1);
-    enableIfValid(row - 1, col + 1);
-    enableIfValid(row + 1, col - 1);
-    enableIfValid(row - 1, col - 1);
-    enableIfValid(row, col + 1);
-    enableIfValid(row, col - 1);
+      // Enable adjacent tiles if within bounds
+      enableIfValid(row + 1, col);
+      enableIfValid(row - 1, col);
+      // enableIfValid(row + 1, col + 1);
+      // enableIfValid(row - 1, col + 1);
+      // enableIfValid(row + 1, col - 1);
+      // enableIfValid(row - 1, col - 1);
+      enableIfValid(row, col + 1);
+      enableIfValid(row, col - 1);
 
       io.emit('boardUpdate', board);
     }
@@ -169,22 +164,35 @@ io.on('connection', (socket) => {
   });
 
   socket.on('clearBoard', () => {
-    board = Array(BOARD_SIZE)
-      .fill(null)
-      .map(() =>
-        Array(BOARD_SIZE)
-          .fill(null)
-          .map(() => ({ player: null, index: null, enabled: false, sequence: null })) // Initialize `index` as well
-      );
-    board[4][4] = { player: 'board', index: -1 };
-    io.emit('boardUpdate', board);
-    console.log('Board cleared');
+    clearBoard();
   });
 
   // Send current board on new connection
   socket.emit('boardUpdate', board);
 });
-
+// Helper to safely enable a tile if within bounds
+function enableIfValid(r, c) {
+  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+    board[r][c].enabled = true;
+  }
+}
+function clearBoard() {
+  board = Array(BOARD_SIZE)
+    .fill(null)
+    .map(() =>
+      Array(BOARD_SIZE)
+        .fill(null)
+        .map(() => ({ player: null, index: null, enabled: false, sequence: null })) // Initialize `index` as well
+    );
+  board[44][44] = { player: 'board', index: -1 };
+  enableIfValid(45, 44);
+  enableIfValid(43, 44);
+  enableIfValid(44, 45);
+  enableIfValid(44, 43);
+  sequence = 0;
+  io.emit('boardUpdate', board);
+  console.log('Board cleared');
+}
 server.listen(3001, '0.0.0.0', () => {
   console.log('Socket.IO server running on port 3001');
 });

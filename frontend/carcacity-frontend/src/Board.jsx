@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
 
-const Board = forwardRef(({ size = 9, clientID, currentPlayer, players }, ref) => {
+const Board = forwardRef(({ size = 99, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500 }, ref) => {
   const [tiles, setTiles] = useState(
     Array(size)
       .fill(null)
       .map(() => Array(size).fill({ player: null, enabled: false }))
   );
+const boardPixelSize = size * 50 + (size - 1) * 2;
+
+  useImperativeHandle(ref, () => ({
+    recenterBoard: () => {
+      // Center the board in the container
+      const offsetX = (containerWidth - boardPixelSize * scale) / 2;
+      const offsetY = (containerHeight - boardPixelSize * scale) / 2;
+      setOffset({ x: offsetX, y: offsetY });
+      setScale(1);
+    }
+  }));
 
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -91,21 +102,72 @@ const Board = forwardRef(({ size = 9, clientID, currentPlayer, players }, ref) =
   }));
 
   const claimTile = (row, col) => {
+    // Only claim if enabled
+    if (!tiles[row][col].enabled) return;
     if (!tiles[row][col].player) {
-      const playerIndex = players.findIndex((p) => p.clientId === clientID);
-      if(playerIndex < 0 ) playerIndex = null;
+      let playerIndex = players.findIndex((p) => p.clientId === clientID);
+      if (playerIndex < 0) playerIndex = null;
       socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));
-        newTiles[row][col] = { player: clientID, index: playerIndex };
+        newTiles[row][col] = { player: clientID, index: playerIndex, enabled: false };
         return newTiles;
       });
     }
   };
 
+  // Visual styles based on state
+  const getTileStyle = (tile) => {
+    // Selected by any player
+    if (tile.player) {
+      return {
+        width: '50px',
+        height: '50px',
+        backgroundColor: playerColors[tile.player] || '#555',
+        cursor: 'not-allowed',
+        borderRadius: '4px',
+        border: '2px solid #222',
+        userSelect: 'none',
+        boxShadow: 'none',
+        opacity: 1,
+        transform: 'none',
+        transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
+      };
+    }
+    // Enabled (not claimed)
+    if (tile.enabled) {
+      return {
+        width: '50px',
+        height: '50px',
+        backgroundColor: '#ddd', // neutral color
+        cursor: 'pointer',
+        borderRadius: '4px',
+        border: '2px solid #eee',
+        userSelect: 'none',
+        boxShadow: '0 4px 12px 0 rgba(0,0,0,0.18), 0 1.5px 3px 0 rgba(0,0,0,0.12)',
+        opacity: 1,
+        transform: 'translateY(-2px)',
+        transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
+      };
+    }
+    // Disabled, not claimed
+    return {
+      width: '50px',
+      height: '50px',
+      backgroundColor: '#bbb', // neutral color
+      cursor: 'not-allowed',
+      borderRadius: '4px',
+      border: '1px solid #222',
+      userSelect: 'none',
+      boxShadow: 'none',
+      opacity: 1,
+      transform: 'none',
+      transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
+    };
+  };
+
   return (
     <div style={{ background: 'transparent' }}>
-      {/* Removed recenter button */}
       <div
         style={{
           width: '85vw',
@@ -135,26 +197,15 @@ const Board = forwardRef(({ size = 9, clientID, currentPlayer, players }, ref) =
           }}
         >
           {tiles.map((row, rowIndex) =>
-            row.map((tile, colIndex) => {
-              const color = tile.player ? playerColors[tile.player] : '#555';
-              //const isEnabled = tile.enabled;
-              return (
-                <div
-                  key={`${rowIndex}-${colIndex}`}
-                  //disabled={!isEnabled}
-                  onClick={() => claimTile(rowIndex, colIndex)}
-                  style={{
-                    width: '50px',
-                    height: '50px',
-                    backgroundColor: color,
-                    cursor: tile.player ? 'not-allowed' : 'pointer',
-                    borderRadius: '4px',
-                    border: '1px solid #222',
-                    userSelect: 'none',
-                  }}
-                />
-              );
-            })
+            row.map((tile, colIndex) => (
+              <div
+                key={`${rowIndex}-${colIndex}`}
+                onClick={() => {
+                  if (tile.enabled && !tile.player) claimTile(rowIndex, colIndex);
+                }}
+                style={getTileStyle(tile)}
+              />
+            ))
           )}
         </div>
       </div>
