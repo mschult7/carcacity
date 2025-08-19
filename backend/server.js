@@ -11,7 +11,7 @@ const io = new Server(server, {
 
 // Map clientId -> { name, socketId, page, connected }
 const users = {};
-const BOARD_SIZE = 99;
+const BOARD_SIZE = 21;
 let sequence = 0;
 let board = Array(BOARD_SIZE)
   .fill(null)
@@ -184,11 +184,11 @@ function clearBoard() {
         .fill(null)
         .map(() => ({ player: null, index: null, enabled: false, sequence: null })) // Initialize `index` as well
     );
-  board[44][44] = { player: 'board', index: -1 };
-  enableIfValid(45, 44);
-  enableIfValid(43, 44);
-  enableIfValid(44, 45);
-  enableIfValid(44, 43);
+  board[10][10] = { player: 'board', index: -1 };
+  enableIfValid(11, 10);
+  enableIfValid(9, 10);
+  enableIfValid(10, 11);
+  enableIfValid(10, 9);
   sequence = 0;
   io.emit('boardUpdate', board);
   console.log('Board cleared');

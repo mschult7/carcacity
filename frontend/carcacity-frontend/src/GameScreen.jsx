@@ -199,7 +199,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
       <div ref={boardContainerRef} style={getBoardContainerStyle()}>
         <Board
           ref={boardRef}
-          size={99}
+          size={21}
           clientID={clientID}
           currentPlayer={playerName}
           players={players}

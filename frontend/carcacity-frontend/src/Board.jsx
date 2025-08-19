@@ -1,35 +1,43 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
 
-const Board = forwardRef(({ size = 99, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500 }, ref) => {
+const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500 }, ref) => {
   const [tiles, setTiles] = useState(
     Array(size)
       .fill(null)
       .map(() => Array(size).fill({ player: null, enabled: false }))
   );
-const boardPixelSize = size * 50 + (size - 1) * 2;
+  const boardPixelSize = size * 50 + (size - 1) * 2;
+
+  // Zoom range: 0.75x - 1.25x
+  const MIN_SCALE = 0.75;
+  const MAX_SCALE = 2;
+  const INITIAL_SCALE = 1;
+
+  const [scale, setScale] = useState(INITIAL_SCALE);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  // Center board on mount
+  useEffect(() => {
+    // Center tile (44,44) in the viewport
+    const tile44Position = 10 * 50 + 10 * 2 + 52;
+    const offsetX = containerWidth / 2 - tile44Position;
+    const offsetY = containerHeight / 2 - tile44Position;
+    setOffset({ x: offsetX, y: offsetY });
+    setScale(INITIAL_SCALE);
+  }, [containerWidth, containerHeight]);
 
   useImperativeHandle(ref, () => ({
     recenterBoard: () => {
-      // Center tile (44,44) in the viewport
-      // Each tile is 50px with 2px gaps, so tile (44,44) is at position:
-      // x = 44 * 50 + 44 * 2 = 2288px from left edge
-      // y = 44 * 50 + 44 * 2 = 2288px from top edge
-      // Center of tile is at 2288 + 25 = 2313px
-      const tile44Position = 44 * 50 + 44 * 2 + 25; // 2313px
+      const tile44Position = 10 * 50 + 10 * 2 + 52;
       const offsetX = containerWidth / 2 - tile44Position;
       const offsetY = containerHeight / 2 - tile44Position;
       setOffset({ x: offsetX, y: offsetY });
-      setScale(1);
+      setScale(INITIAL_SCALE);
     }
   }));
 
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-
   const touchData = useRef({
-    lastTouchDistance: null,
-    lastTouchScale: 1,
     lastTouchCenter: { x: 0, y: 0 },
     lastOffset: { x: 0, y: 0 },
   });
@@ -45,6 +53,7 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
     return () => socket.off('boardUpdate');
   }, []);
 
+  // Disable pinch zoom by ignoring two-finger touch move for scaling (only allow panning)
   const handleTouchStart = (e) => {
     if (e.touches.length === 1) {
       touchData.current.lastOffset = { ...offset };
@@ -52,22 +61,12 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
         x: e.touches[0].clientX,
         y: e.touches[0].clientY,
       };
-    } else if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      touchData.current.lastTouchDistance = Math.hypot(dx, dy);
-      touchData.current.lastTouchScale = scale;
-      touchData.current.lastTouchCenter = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      };
-      touchData.current.lastOffset = { ...offset };
     }
+    // If two touches: ignore for zoom (no action)
   };
 
   const handleTouchMove = (e) => {
     e.preventDefault();
-
     if (e.touches.length === 1) {
       const dx = e.touches[0].clientX - touchData.current.lastTouchCenter.x;
       const dy = e.touches[0].clientY - touchData.current.lastTouchCenter.y;
@@ -75,31 +74,13 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
         x: touchData.current.lastOffset.x + dx,
         y: touchData.current.lastOffset.y + dy,
       });
-    } else if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const newDistance = Math.hypot(dx, dy);
-      const newScale = Math.max(0.5, Math.min(3, (newDistance / touchData.current.lastTouchDistance) * touchData.current.lastTouchScale));
-
-      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-      const newOffset = {
-        x: touchData.current.lastOffset.x + (centerX - touchData.current.lastTouchCenter.x) * (1 - newScale / touchData.current.lastTouchScale),
-        y: touchData.current.lastOffset.y + (centerY - touchData.current.lastTouchCenter.y) * (1 - newScale / touchData.current.lastTouchScale),
-      };
-
-      setScale(newScale);
-      setOffset(newOffset);
     }
+    // If two touches: ignore for zoom (no action)
   };
 
-  const handleTouchEnd = () => {
-    touchData.current.lastTouchDistance = null;
-  };
+  const handleTouchEnd = () => { };
 
   const claimTile = (row, col) => {
-    // Only claim if enabled
     if (!tiles[row][col].enabled) return;
     if (!tiles[row][col].player) {
       let playerIndex = players.findIndex((p) => p.clientId === clientID);
@@ -113,9 +94,7 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
     }
   };
 
-  // Visual styles based on state
   const getTileStyle = (tile) => {
-    // Selected by any player
     if (tile.player) {
       return {
         width: '50px',
@@ -131,12 +110,11 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
         transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
       };
     }
-    // Enabled (not claimed)
     if (tile.enabled) {
       return {
         width: '50px',
         height: '50px',
-        backgroundColor: '#ddd', // neutral color
+        backgroundColor: '#ddd',
         cursor: 'pointer',
         borderRadius: '4px',
         border: '2px solid #eee',
@@ -147,11 +125,10 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
         transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
       };
     }
-    // Disabled, not claimed
     return {
       width: '50px',
       height: '50px',
-      backgroundColor: '#bbb', // neutral color
+      backgroundColor: '#bbb',
       cursor: 'not-allowed',
       borderRadius: '4px',
       border: '1px solid #222',
@@ -163,8 +140,35 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
     };
   };
 
+  // Prevent browser pinch zoom and double-tap zoom
+  useEffect(() => {
+    const preventPinch = (e) => {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchmove', preventPinch, { passive: false });
+    document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    return () => {
+      document.removeEventListener('touchmove', preventPinch);
+      document.removeEventListener('gesturestart', (e) => e.preventDefault());
+    };
+  }, []);
+
   return (
-    <div style={{ background: 'transparent' }}>
+    <div
+      style={{
+        background: 'transparent',
+        width: '100vw',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        paddingBottom: '48px', // Ensure space for slider
+      }}
+    >
       <div
         style={{
           width: '85vw',
@@ -205,6 +209,21 @@ const boardPixelSize = size * 50 + (size - 1) * 2;
             ))
           )}
         </div>
+      </div>
+      {/* Zoom slider below board, always visible */}
+      <div style={{ width: '100%', textAlign: 'center', margin: '16px 0', position: 'relative', zIndex: 2 }}>
+        <label htmlFor="zoom-slider" style={{ marginRight: '8px', fontWeight: 'bold' }}>Zoom:</label>
+        <input
+          id="zoom-slider"
+          type="range"
+          min={MIN_SCALE}
+          max={MAX_SCALE}
+          step={0.01}
+          value={scale}
+          onChange={e => setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(e.target.value))))}
+          style={{ width: '240px', verticalAlign: 'middle' }}
+        />
+        <span style={{ marginLeft: '12px' }}>{(scale * 100).toFixed(0)}%</span>
       </div>
     </div>
   );
