@@ -42,7 +42,8 @@ const App = () => {
           // setCurrentName("");
           setScreen("lobby");
         }
-      }
+      } 
+
     };
 
     // Subscribe to the "users" event

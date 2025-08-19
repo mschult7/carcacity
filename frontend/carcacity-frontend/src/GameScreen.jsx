@@ -116,7 +116,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
             background: 'rgba(0,0,0,0.7)',
             borderRadius: '8px',
             padding: uiMinimized ? '0.5rem 0.7rem' : '0.75rem 1rem',
-            minWidth: uiMinimized ? 'auto' : '180px',
+            minWidth: uiMinimized ? 'auto' : 'auto',
             textAlign: 'left',
             boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
             ...userSelectNoneStyle,

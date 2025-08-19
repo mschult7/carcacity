@@ -2,10 +2,7 @@ import { io } from "socket.io-client";
 
 // Get or create persistent clientId (sessionID)
 let clientId = localStorage.getItem("sessionID");
-if (!clientId) {
-  clientId = crypto.randomUUID();
-  localStorage.setItem("sessionID", clientId);
-}
+setClientId();
 
 // Connect to Socket.IO server
 export const socket = io("https://panther01.ddns.net", {
@@ -16,12 +13,17 @@ export const socket = io("https://panther01.ddns.net", {
 export function joinServer(name) {
   if (!name) return;
   if (!clientId) {
-  clientId = crypto.randomUUID();
-  localStorage.setItem("sessionID", clientId);
-}
+    clientId = crypto.randomUUID();
+    localStorage.setItem("sessionID", clientId);
+  }
   socket.emit("join", { name, clientId });
 }
-
+export function setClientId() {
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    localStorage.setItem("sessionID", clientId);
+  }
+}
 // Update page (lobby or game)
 export function updatePage(page) {
   socket.emit("updatePage", page);

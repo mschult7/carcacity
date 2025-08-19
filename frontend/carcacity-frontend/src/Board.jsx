@@ -7,34 +7,52 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
       .fill(null)
       .map(() => Array(size).fill({ player: null, enabled: false }))
   );
-  const boardPixelSize = size * 50 + (size - 1) * 2;
 
-  // Zoom range: 0.75x - 1.25x
-  const MIN_SCALE = 0.75;
+  // Zoom range: 0.25x - 2x
+  const MIN_SCALE = 0.25;
   const MAX_SCALE = 2;
   const INITIAL_SCALE = 1;
 
   const [scale, setScale] = useState(INITIAL_SCALE);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
-  // Center board on mount
+  // Orientation detection
+  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
+
   useEffect(() => {
-    // Center tile (44,44) in the viewport
-    const tile44Position = 10 * 50 + 10 * 2 + 52;
+    const handleResize = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  // Helper: recenter board
+  const centerBoard = () => {
+    const tile44Position = 10 * 23;
     const offsetX = containerWidth / 2 - tile44Position;
     const offsetY = containerHeight / 2 - tile44Position;
     setOffset({ x: offsetX, y: offsetY });
     setScale(INITIAL_SCALE);
+  };
+
+  // Center on mount
+  useEffect(() => {
+    centerBoard();
   }, [containerWidth, containerHeight]);
 
+  // 🔥 Recenter on orientation change
+  useEffect(() => {
+    centerBoard();
+  }, [isLandscape]);
+
+  // Expose recenter to parent
   useImperativeHandle(ref, () => ({
-    recenterBoard: () => {
-      const tile44Position = 10 * 50 + 10 * 2 + 52;
-      const offsetX = containerWidth / 2 - tile44Position;
-      const offsetY = containerHeight / 2 - tile44Position;
-      setOffset({ x: offsetX, y: offsetY });
-      setScale(INITIAL_SCALE);
-    }
+    recenterBoard: () => centerBoard()
   }));
 
   const touchData = useRef({
@@ -53,7 +71,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
     return () => socket.off('boardUpdate');
   }, []);
 
-  // Disable pinch zoom by ignoring two-finger touch move for scaling (only allow panning)
+  // Touch events (drag only, no pinch zoom)
   const handleTouchStart = (e) => {
     if (e.touches.length === 1) {
       touchData.current.lastOffset = { ...offset };
@@ -62,7 +80,6 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         y: e.touches[0].clientY,
       };
     }
-    // If two touches: ignore for zoom (no action)
   };
 
   const handleTouchMove = (e) => {
@@ -75,16 +92,16 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         y: touchData.current.lastOffset.y + dy,
       });
     }
-    // If two touches: ignore for zoom (no action)
   };
 
-  const handleTouchEnd = () => { };
+  const handleTouchEnd = () => {};
 
   const claimTile = (row, col) => {
     if (!tiles[row][col].enabled) return;
     if (!tiles[row][col].player) {
       let playerIndex = players.findIndex((p) => p.clientId === clientID);
       if (playerIndex < 0) playerIndex = null;
+      
       socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));
@@ -162,24 +179,25 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         width: '100vw',
         minHeight: '100vh',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: isLandscape ? 'row' : 'column',
         alignItems: 'center',
         justifyContent: 'center',
         boxSizing: 'border-box',
-        paddingBottom: '48px', // Ensure space for slider
+        paddingBottom: !isLandscape ? '48px' : '0',
       }}
     >
+      {/* Board container */}
       <div
         style={{
-          width: '85vw',
-          height: '80vw',
-          maxWidth: '500px',
-          maxHeight: '500px',
+          width: isLandscape ? '125vh' : '85vw',
+          height: isLandscape ? '80vh' : '80vw',
           border: '2px solid #222',
           overflow: 'hidden',
           touchAction: 'none',
-          margin: '0 auto',
           position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -210,21 +228,85 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
           )}
         </div>
       </div>
-      {/* Zoom slider below board, always visible */}
-      <div style={{ width: '100%', textAlign: 'center', margin: '16px 0', position: 'relative', zIndex: 2 }}>
-        <label htmlFor="zoom-slider" style={{ marginRight: '8px', fontWeight: 'bold' }}>Zoom:</label>
-        <input
-          id="zoom-slider"
-          type="range"
-          min={MIN_SCALE}
-          max={MAX_SCALE}
-          step={0.01}
-          value={scale}
-          onChange={e => setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(e.target.value))))}
-          style={{ width: '240px', verticalAlign: 'middle' }}
-        />
-        <span style={{ marginLeft: '12px' }}>{(scale * 100).toFixed(0)}%</span>
-      </div>
+
+      {/* Vertical slider for landscape */}
+      {isLandscape && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: '24px',
+            height: '500px',
+            width: '1%',
+          }}
+        >
+          <label
+            htmlFor="zoom-slider-vertical"
+            style={{
+              marginBottom: '8px',
+              fontWeight: 'bold',
+              writingMode: 'vertical-lr',
+              transform: 'rotate(180deg)',
+            }}
+          >
+            Zoom
+          </label>
+          <input
+            id="zoom-slider-vertical"
+            type="range"
+            min={MIN_SCALE}
+            max={MAX_SCALE}
+            step={0.01}
+            value={scale}
+            onChange={(e) =>
+              setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(e.target.value))))
+            }
+            style={{
+              writingMode: 'bt-lr',
+              WebkitAppearance: 'slider-vertical',
+              width: '320px',
+              height: '75vh',
+              marginBottom: '8px',
+            }}
+          />
+          <span style={{ marginTop: '8px' }}>{(scale * 100).toFixed(0)}%</span>
+        </div>
+      )}
+
+      {/* Horizontal slider for portrait */}
+      {!isLandscape && (
+        <div
+          style={{
+            width: '100%',
+            textAlign: 'center',
+            margin: '16px 0',
+            position: 'relative',
+            zIndex: 2,
+          }}
+        >
+          <label
+            htmlFor="zoom-slider-horizontal"
+            style={{ marginRight: '8px', fontWeight: 'bold' }}
+          >
+            Zoom:
+          </label>
+          <input
+            id="zoom-slider-horizontal"
+            type="range"
+            min={MIN_SCALE}
+            max={MAX_SCALE}
+            step={0.01}
+            value={scale}
+            onChange={(e) =>
+              setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(e.target.value))))
+            }
+            style={{ width: '240px', verticalAlign: 'middle' }}
+          />
+          <span style={{ marginLeft: '12px' }}>{(scale * 100).toFixed(0)}%</span>
+        </div>
+      )}
     </div>
   );
 });

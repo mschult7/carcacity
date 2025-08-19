@@ -105,7 +105,7 @@ io.on('connection', (socket) => {
       for (let row = 0; row < BOARD_SIZE; row++) {
         for (let col = 0; col < BOARD_SIZE; col++) {
           if (board[row][col].player === clientId) {
-            board[row][col] = { player: null, index: null, sequence: board[row][col].sequence, enabled: board[row][col].sequence };
+            board[row][col] = { player: null, index: null, sequence: board[row][col].sequence, enabled: board[row][col].enabled };
           }
         }
       }
@@ -173,7 +173,9 @@ io.on('connection', (socket) => {
 // Helper to safely enable a tile if within bounds
 function enableIfValid(r, c) {
   if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-    board[r][c].enabled = true;
+    if (board[r][c].sequence === null) {
+      board[r][c].enabled = true;
+    }
   }
 }
 function clearBoard() {
