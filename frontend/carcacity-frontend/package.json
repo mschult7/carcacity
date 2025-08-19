@@ -10,11 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-spring/web": "^10.0.1",
+    "@use-gesture/react": "^10.3.1",
     "framer-motion": "^12.23.12",
     "konva": "^9.3.22",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-konva": "^19.0.7"
+    "react-konva": "^19.0.7",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

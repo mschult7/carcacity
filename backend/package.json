@@ -1,0 +1,22 @@
+{
+  "name": "tile-board-game-backend",
+  "version": "1.0.0",
+  "description": "Backend server for tile board game using Express and Socket.IO",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "express",
+    "socket.io",
+    "board-game",
+    "multiplayer"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  }
+}
