@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { socket } from "./socket"; // Socket.IO client instance
+import { joinServer, socket } from "./socket"; // Socket.IO client instance
 import SplashScreen from './SplashScreen.jsx';
 import Lobby from './Lobby.jsx';
 import GameScreen from './GameScreen.jsx';
@@ -81,11 +81,9 @@ const App = () => {
    * Saves the name locally, updates state, and notifies the server.
    */
   const handleJoin = (name) => {
-    if (!name || !clientId) return;
-
-    localStorage.setItem("playerName", name);
+    if (!name) return;
+    joinServer(name);
     setCurrentName(name);
-    socket.emit("join", { name, clientId });
   };
 
   /**
@@ -116,6 +114,7 @@ const App = () => {
   const handleExit = () => {
     socket.emit("leave");
     localStorage.removeItem("playerName");
+    localStorage.removeItem("sessionID");
     setCurrentName("");
     setScreen("splash");
   };

@@ -11,11 +11,12 @@ const io = new Server(server, {
 
 // Map clientId -> { name, socketId, page, connected }
 const users = {};
-const BOARD_SIZE = 8;
+const BOARD_SIZE = 9;
+let sequence = 0;
 let board = Array(BOARD_SIZE)
   .fill(null)
   .map(() =>
-    Array(BOARD_SIZE).fill({ player: null, index: null })
+    Array(BOARD_SIZE).fill({ player: null, index: null, enabled: false, sequence: null })
   );
 
 io.on('connection', (socket) => {
@@ -24,6 +25,13 @@ io.on('connection', (socket) => {
   // Register or update user
   socket.on('join', ({ name, clientId }) => {
     if (!name || !clientId) return;
+
+    // Determine join type
+    let joinType = 'joining';
+    if (users[clientId]) {
+      // If user was previously disconnected, it's a rejoin
+      joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
+    }
 
     users[clientId] = {
       clientId,
@@ -34,7 +42,10 @@ io.on('connection', (socket) => {
       robot: false,
     };
 
-    console.log(`User joined/rejoined: ${name} (clientId ${clientId}, socket ${socket.id})`);
+    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
+    // Also emit joinType to this user (and optionally to others)
+    //socket.emit('joinType', joinType);
+
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
   });
 
@@ -89,6 +100,14 @@ io.on('connection', (socket) => {
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
     if (clientId) {
       console.log(`User left: ${users[clientId].name}`);
+      // Clear board objects matching the clientId
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (board[row][col].player === clientId) {
+            board[row][col] = { player: null, index: null, sequence: board[row][col].sequence, enabled: board[row][col].sequence };
+          }
+        }
+      }
       delete users[clientId];
     }
     io.emit('users', Object.values(users));
@@ -120,8 +139,27 @@ io.on('connection', (socket) => {
   socket.on('clickTile', ({ row, col, player, index }) => {
     // Only update if empty
     if (!board[row][col].player) {
-      board[row][col] = { player, index };
+      console.log(`Tile Clicked: [${row}, ${col}] ${player}`);
+      board[row][col] = { player, index, enabled: false, sequence: sequence };
       // Broadcast updated board to all clients
+      sequence = sequence + 1;
+      // Helper to safely enable a tile if within bounds
+    function enableIfValid(r, c) {
+      if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+        board[r][c].enabled = true;
+      }
+    }
+
+    // Enable adjacent tiles if within bounds
+    enableIfValid(row + 1, col);
+    enableIfValid(row - 1, col);
+    enableIfValid(row + 1, col + 1);
+    enableIfValid(row - 1, col + 1);
+    enableIfValid(row + 1, col - 1);
+    enableIfValid(row - 1, col - 1);
+    enableIfValid(row, col + 1);
+    enableIfValid(row, col - 1);
+
       io.emit('boardUpdate', board);
     }
   });
@@ -136,9 +174,9 @@ io.on('connection', (socket) => {
       .map(() =>
         Array(BOARD_SIZE)
           .fill(null)
-          .map(() => ({ player: null, index: null })) // Initialize `index` as well
+          .map(() => ({ player: null, index: null, enabled: false, sequence: null })) // Initialize `index` as well
       );
-
+    board[4][4] = { player: 'board', index: -1 };
     io.emit('boardUpdate', board);
     console.log('Board cleared');
   });

@@ -14,7 +14,11 @@ export const socket = io("https://panther01.ddns.net", {
 
 // Join the server with a name
 export function joinServer(name) {
-  if (!name || !clientId) return;
+  if (!name) return;
+  if (!clientId) {
+  clientId = crypto.randomUUID();
+  localStorage.setItem("sessionID", clientId);
+}
   socket.emit("join", { name, clientId });
 }
 

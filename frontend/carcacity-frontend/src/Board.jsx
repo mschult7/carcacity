@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
 
-const Board = ({ size = 8, clientID, currentPlayer, players }) => {
+const Board = forwardRef(({ size = 9, clientID, currentPlayer, players }, ref) => {
   const [tiles, setTiles] = useState(
     Array(size)
       .fill(null)
-      .map(() => Array(size).fill({ player: null }))
+      .map(() => Array(size).fill({ player: null, enabled: false }))
   );
 
   const [scale, setScale] = useState(1);
@@ -31,14 +31,12 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
 
   const handleTouchStart = (e) => {
     if (e.touches.length === 1) {
-      // Single touch for panning
       touchData.current.lastOffset = { ...offset };
       touchData.current.lastTouchCenter = {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY,
       };
     } else if (e.touches.length === 2) {
-      // Multi-touch for zooming
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       touchData.current.lastTouchDistance = Math.hypot(dx, dy);
@@ -55,7 +53,6 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
     e.preventDefault();
 
     if (e.touches.length === 1) {
-      // Panning
       const dx = e.touches[0].clientX - touchData.current.lastTouchCenter.x;
       const dy = e.touches[0].clientY - touchData.current.lastTouchCenter.y;
       setOffset({
@@ -63,7 +60,6 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
         y: touchData.current.lastOffset.y + dy,
       });
     } else if (e.touches.length === 2) {
-      // Zooming
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const newDistance = Math.hypot(dx, dy);
@@ -86,22 +82,22 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
     touchData.current.lastTouchDistance = null;
   };
 
-  const recenterBoard = () => {
-    setOffset({ x: 0, y: 0 });
-    setScale(1);
-  };
+  // Expose recenterBoard method to parent via ref
+  useImperativeHandle(ref, () => ({
+    recenterBoard: () => {
+      setOffset({ x: 0, y: 0 });
+      setScale(1);
+    }
+  }));
 
   const claimTile = (row, col) => {
     if (!tiles[row][col].player) {
-      // Find the index of the current player based on their position in the players array
       const playerIndex = players.findIndex((p) => p.clientId === clientID);
-      // Emit the player's index alongside their clientId
+      if(playerIndex < 0 ) playerIndex = null;
       socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
-
-      // Update local state to reflect the claimed tile
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));
-        newTiles[row][col] = { player: clientID, index: playerIndex }; // Include index
+        newTiles[row][col] = { player: clientID, index: playerIndex };
         return newTiles;
       });
     }
@@ -109,26 +105,11 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
 
   return (
     <div style={{ background: 'transparent' }}>
-      <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        <button
-          onClick={recenterBoard}
-          style={{
-            padding: '0.5rem 1rem',
-            fontSize: '1rem',
-            cursor: 'pointer',
-            borderRadius: '4px',
-            border: '1px solid #222',
-            backgroundColor: '#eee',
-          }}
-        >
-          Recenter Board
-        </button>
-      </div>
-
+      {/* Removed recenter button */}
       <div
         style={{
-          width: '90vw',
-          height: '90vw',
+          width: '85vw',
+          height: '80vw',
           maxWidth: '500px',
           maxHeight: '500px',
           border: '2px solid #222',
@@ -156,9 +137,11 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
           {tiles.map((row, rowIndex) =>
             row.map((tile, colIndex) => {
               const color = tile.player ? playerColors[tile.player] : '#555';
+              //const isEnabled = tile.enabled;
               return (
                 <div
                   key={`${rowIndex}-${colIndex}`}
+                  //disabled={!isEnabled}
                   onClick={() => claimTile(rowIndex, colIndex)}
                   style={{
                     width: '50px',
@@ -177,6 +160,6 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
       </div>
     </div>
   );
-};
+});
 
 export default Board;
