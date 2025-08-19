@@ -108,7 +108,7 @@ const Board = ({ size = 8, clientID, currentPlayer, players }) => {
   };
 
   return (
-    <div>
+    <div style={{ background: 'transparent' }}>
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
         <button
           onClick={recenterBoard}

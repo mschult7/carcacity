@@ -7,7 +7,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
     <div
       style={{
         height: '100vh',
-        background: '#333',
+        background: '#000',
         color: '#fff',
         display: 'flex',
         flexDirection: 'column',
