@@ -133,6 +133,11 @@ const App = () => {
     setCurrentName("");
     setScreen("splash");
   };
+  const handleEndGame = () => {
+    setScreen("lobby");
+    socket.emit("clearBoard");
+    socket.emit("clearAll");
+  };
   const handleStartGame = () => {
     if (!gameStarted) {
       console.log("start requested");
@@ -172,7 +177,7 @@ const App = () => {
           playerName={currentName}
           players={players}
           onLobby={handleLobby}
-          onExit={handleExit}
+          onEndGame={handleEndGame}
           handleStartGame={handleStartGame}
           gameStarted={gameStarted}
         />

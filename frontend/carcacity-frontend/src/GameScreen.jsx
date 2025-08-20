@@ -1,12 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Board from './Board.jsx';
 import { motion } from "framer-motion";
-import { playerColors, defaultColors, getColor } from "./colors";
-// Helper for responsive board size
+import { getColor } from "./colors";
+import useLandscape from './useLandscape';
+
+
 const getBoardContainerStyle = () => ({
   position: 'relative',
-  width: 'min(100vw, 100vh)',
-  height: 'min(100vw, 100vh)',
+  width: '100vw',
+  height: '100vh',
   maxWidth: '100vw',
   maxHeight: '100vh',
   aspectRatio: '1 / 1',
@@ -23,16 +25,14 @@ const userSelectNoneStyle = {
   MozUserSelect: 'none',
 };
 
-const GameScreen = ({ clientID, playerName, players, onLobby, onExit, handleStartGame, gameStarted }) => {
+const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleStartGame, gameStarted }) => {
   const boardRef = useRef();
   const [uiMinimized, setUiMinimized] = useState(false);
-
-  // For measuring container size for centering board
+  const isLandscape = useLandscape();
+  // Board container
   const boardContainerRef = useRef();
   const [containerSize, setContainerSize] = useState({ width: 500, height: 500 });
-
   useEffect(() => {
-    // Measure container size on mount and when window resizes
     const updateSize = () => {
       if (boardContainerRef.current) {
         setContainerSize({
@@ -47,9 +47,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit, handleStar
   }, []);
 
   const handleRecenter = () => {
-    if (boardRef.current && boardRef.current.recenterBoard) {
-      boardRef.current.recenterBoard();
-    }
+    if (boardRef.current?.recenterBoard) boardRef.current.recenterBoard();
   };
   const handleMinimize = () => setUiMinimized(true);
   const handleRestore = () => setUiMinimized(false);
@@ -67,195 +65,117 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit, handleStar
         position: 'relative',
         overflow: 'hidden',
         fontFamily: "MedievalSharp",
-        userSelect: 'none',           // disables text selection
-        WebkitUserSelect: 'none',     // Safari
-        MozUserSelect: 'none',        // Firefox
-        msUserSelect: 'none',         // IE/Edge
+        ...userSelectNoneStyle,
       }}
     >
-      {/* UI Overlay */}
+      {/* Overlay */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.75 }}
         style={{
           position: 'absolute',
           top: '0',
           left: '0',
-          width: '100vw',
-          zIndex: 2,
-          padding: '0.5rem 0',
+          right: '0',
+          height: isLandscape ? 'auto' : '100%',
+          width: '98%',
           display: 'flex',
-          justifyContent: 'space-between',
+          flexDirection: isLandscape ? 'row' : 'column',
+          justifyContent: isLandscape ? 'space-between' : 'flex-start',
           alignItems: 'flex-start',
+          padding: '0.5rem',
+          zIndex: 2,
+          gap: isLandscape ? '0.5rem' : '1rem',
           pointerEvents: 'none',
-          ...userSelectNoneStyle,
         }}
       >
-        {/* Exit Button */}
-        <button
+        {/* Players */}
+        <div
           style={{
+            maxWidth: isLandscape ? '' : '25vw',
+            // overflow: 'hidden',
+            display: 'flex',
+            flexDirection: isLandscape ? 'row' : 'column',
+            gap: isLandscape ? '0.5rem' : '3rem',
             pointerEvents: 'auto',
-            marginLeft: '1rem',
-            marginTop: '1rem',
-            padding: '0.5rem 1rem',
-            fontSize: '1rem',
-            background: '#e74c3c',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            ...userSelectNoneStyle,
+            position: isLandscape ? 'static' : 'absolute',
+            top: isLandscape ? 'auto' : '2vhs',
+            left: isLandscape ? 'auto' : '0.5rem',
+            justifyContent: isLandscape ? 'flex-start' : 'flex-start',
+            transform: isLandscape ? 'none' : 'none', // Remove translateY to stop centering
           }}
-          onClick={onLobby}
         >
-          X
-        </button>
-        {players.map((p, idx) => (
-          <div
-            key={idx}
-            style={{
-              pointerEvents: 'auto',
-              marginRight: '1rem',
-              marginTop: '1rem',
-              background: `${getColor(idx)}`,
-              borderRadius: '8px',
-              padding: uiMinimized ? '0.5rem 0.7rem' : '0.75rem 1rem',
-              minWidth: uiMinimized ? 'auto' : 'auto',
-              textAlign: 'left',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-              transition: 'padding 0.2s, min-width 0.2s',
-              position: 'relative',
-            }}
-          >
-            <div>
-              <strong>{p.name}</strong>
-            </div>
 
-            {/* underline */}
+          {[
+            // Include the current player first
+            ...players.filter((p) => p.clientId === clientID),
+            // Include the rest of the players in their original order
+            ...players.filter((p) => p.clientId !== clientID),
+          ].map((p, idx) => (
             <div
+              key={idx}
               style={{
-                display: p.isTurn ? 'block' : 'none',
-                position: 'absolute',
-                bottom: '-6px', // floats under
-                left: '10%',
-                right: '10%',
-                height: '4px',
-                background: `${getColor(idx)}`,
-                borderRadius: '2px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                background: getColor(idx),
+                borderRadius: '8px',
+                padding: '0.5rem 0.7rem',
+                textAlign: 'left',
+                position: 'relative',
               }}
-            />
-          </div>
-        ))}
+            >
+              <div><strong>{p.name}</strong></div>
+              <div
+                style={{
+                  display: p.isTurn ? 'block' : 'none',
+                  position: 'absolute',
+                  bottom: '-6px',
+                  left: '10%',
+                  right: '10%',
+                  height: '4px',
+                  background: getColor(idx),
+                  borderRadius: '2px',
+                }}
+              />
+            </div>
+          ))}
+        </div>
 
-        {/* Player List & Recenter & Minimize */}
+        {/* Menu */}
         <div
           style={{
             pointerEvents: 'auto',
-            marginRight: '1rem',
-            marginTop: '1rem',
             background: 'rgba(0,0,0,0.7)',
             borderRadius: '8px',
             padding: uiMinimized ? '0.5rem 0.7rem' : '0.75rem 1rem',
-            minWidth: uiMinimized ? 'auto' : 'auto',
-            textAlign: 'left',
             boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-            ...userSelectNoneStyle,
-            transition: 'padding 0.2s, min-width 0.2s',
+            alignSelf: isLandscape ? 'flex-start' : 'flex-end',
+            position: isLandscape ? 'static' : 'absolute',
+            top: isLandscape ? 'auto' : '0.5rem',
+            right: isLandscape ? 'auto' : '0.5rem',
+            maxWidth: '50vw',
           }}
         >
           {!uiMinimized ? (
             <>
-              <div>
-                <strong>Players:</strong>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {players.map((p, idx) => (
-                    <li key={idx}>
-                      {p.name} {p.page && <span style={{ color: '#3b9774' }}>({p.page})</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <button
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '0.4rem 1rem',
-                  fontFamily: "MedievalSharp",
-                  fontSize: '0.95rem',
-                  background: '#3b9774',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  width: '100%',
-                  display: gameStarted ? 'none' : 'auto',
-                  ...userSelectNoneStyle,
-                }}
-                onClick={handleStartGame}
-              >
-                Start Game
-              </button>
-              <button
-                style={{
-                  marginTop: '0.75rem',
-                  padding: '0.4rem 1rem',
-                  fontFamily: "MedievalSharp",
-                  fontSize: '0.95rem',
-                  background: '#3b9774',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  width: '100%',
-                  ...userSelectNoneStyle,
-                }}
-                onClick={handleRecenter}
-              >
-                Recenter
-              </button>
-              <button
-                style={{
-                  marginTop: '0.6rem',
-                  padding: '0.2rem 0.7rem',
-                  fontSize: '0.85rem',
-                  background: '#222',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  float: 'right',
-                  ...userSelectNoneStyle,
-                }}
-                title="Minimize overlay"
-                onClick={handleMinimize}
-              >
-                &#8211;
-              </button>
+              <div><strong>Menu</strong></div>
+              {!gameStarted && (
+                <button style={btnStyle} onClick={handleStartGame}>Start Game</button>
+              )}
+              <button style={btnStyle} onClick={handleRecenter}>Recenter</button>
+              <button style={btnStyle} onClick={onLobby}>Lobby</button>
+              {gameStarted && (
+                <button style={btnStyle} onClick={onEndGame}>End Game</button>
+              )}
+              <button style={minBtnStyle} onClick={handleMinimize} title="Minimize">−</button>
             </>
           ) : (
-            <button
-              style={{
-                padding: '0.2rem 0.7rem',
-                fontSize: '1.2rem',
-                background: '#222',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '50%',
-                cursor: 'pointer',
-                ...userSelectNoneStyle,
-              }}
-              title="Restore overlay"
-              onClick={handleRestore}
-            >
-              &#x25A1;
-            </button>
+            <button style={minBtnStyle} onClick={handleRestore} title="Restore">☰</button>
           )}
         </div>
-      </motion.div >
+      </motion.div>
 
-      {/* Board Container - Always Square, fills available space */}
-      < div ref={boardContainerRef} style={getBoardContainerStyle()} >
+      {/* Board */}
+      <div ref={boardContainerRef} style={getBoardContainerStyle()}>
         <Board
           ref={boardRef}
           size={21}
@@ -265,9 +185,31 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit, handleStar
           containerWidth={containerSize.width}
           containerHeight={containerSize.height}
         />
-      </div >
-    </div >
+      </div>
+    </div>
   );
+};
+
+const btnStyle = {
+  marginTop: '0.75rem',
+  padding: '0.4rem 1rem',
+  fontFamily: "MedievalSharp",
+  fontSize: '0.95rem',
+  background: '#3b9774',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  width: '100%',
+};
+
+const minBtnStyle = {
+  fontSize: '0.85rem',
+  background: 'transparent', // let parent show through
+  color: '#fff',
+  border: 'none',
+  cursor: 'pointer',
+  opacity: 0.7, // match parent background alpha
 };
 
 export default GameScreen;

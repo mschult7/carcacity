@@ -10,7 +10,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
   }, [currentName]);
 
   const isJoined = currentName && players.some(u => u.name === currentName);
-  const canJoin = currentName && (players.length > 0) && (!gameStarted ||isJoined );
+  const canJoin = currentName && (players.length > 0) && (!gameStarted || isJoined);
   const availableSpace = (players.length < 5) && !gameStarted;
   const canEnterName = (!gameStarted || (isJoined && name !== currentName)) && name && (players.length < 5 || (isJoined && name === currentName));
 
@@ -77,6 +77,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             border: '2px solid white',
             background: 'transparent',
             color: 'white',
+            maxWidth: '50vw',
           }}
         />
         <button
@@ -102,9 +103,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             fontSize: "1rem",
             fontFamily: "MedievalSharp",
             fontWeight: "bold",
-            color: "#3b9774",
-            background: "transparent",
-            border: "2px solid #3b9774",
+            background: '#3b9774',
+            color: '#fff',
+            border: 'none',
             borderRadius: "8px",
             cursor: canJoin ? "pointer" : "not-allowed",
           }}
@@ -119,15 +120,15 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             fontSize: "1rem",
             fontFamily: "MedievalSharp",
             fontWeight: "bold",
-            color: "#fff",
-            background: "#222",
-            border: "2px solid #3b9774",
+            background: '#3b9774',
+            color: '#fff',
+            border: 'none',
             borderRadius: "8px",
             cursor: "pointer",
           }}
           onClick={() => setSettingsOpen(!settingsOpen)}
         >
-          ⚙ Settings
+          ⚙
         </button>
       </div>
 
@@ -187,13 +188,14 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
           style={{
             padding: '0.5rem',
             borderRadius: '6px',
-            border: '2px solid #3b9774',
-            background: 'transparent',
+            background: '#3b9774',
+            color: '#fff',
+            border: 'none',
             color: '#fff',
             cursor: 'pointer',
             fontFamily: "MedievalSharp",
             fontWeight: 'bold',
-           cursor: availableSpace ? "pointer" : "not-allowed",
+            cursor: availableSpace ? "pointer" : "not-allowed",
           }}
           disabled={!availableSpace}
           onClick={addRobot}

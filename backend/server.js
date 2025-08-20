@@ -45,8 +45,8 @@ io.on('connection', (socket) => {
       page: users[clientId]?.page || 'lobby',
       connected: true,
       robot: false,
-      isTurn: false,
-      lastTile: [],
+      isTurn: users[clientId]?.isTurn || false,
+      lastTile: users[clientId]?.lastTile || [],
     };
 
     console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
@@ -152,6 +152,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('clearAll', () => {
+    users.forEach(user => {
+      user.page = 'lobby';
+    });
+    io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+
     for (const sockId of Object.keys(io.sockets.sockets)) {
       const sock = io.sockets.sockets.get(sockId);
       if (sock) sock.disconnect(true);

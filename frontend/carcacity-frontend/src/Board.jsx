@@ -255,8 +255,8 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
     >
       <div
         style={{
-          width: isLandscape ? '125vh' : '85vw',
-          height: isLandscape ? '80vh' : '80vw',
+          // width: isLandscape ? '125vh' : '85vw',
+          // height: isLandscape ? '80vh' : '80vw',
           border: '2px solid #222',
           overflow: 'hidden',
           touchAction: 'none',
