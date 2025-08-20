@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
-
+import { playerColors, defaultColors, initializeColors } from "./colors";
 const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500 }, ref) => {
   const [tiles, setTiles] = useState(
     Array(size)
@@ -44,11 +44,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
   }));
 
   // Player colors
-  const playerColors = {};
-  const defaultColors = ['#3b9774', '#e67e22', '#8e44ad', '#f1c40f', '#3498db'];
-  players.forEach((p, idx) => {
-    playerColors[p.clientId] = defaultColors[idx % defaultColors.length];
-  });
+
 
   useEffect(() => {
     socket.on('boardUpdate', (newBoard) => setTiles(newBoard));
@@ -165,9 +161,17 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
   // ------------------------------
   const claimTile = (row, col) => {
     if (!tiles[row][col].enabled) return;
+    if (!clientID) return;
+
+
+    let playerIndex = players.findIndex((p) => p.clientId === clientID);
+    if (playerIndex < 0) playerIndex = null;
+    let player = players[playerIndex];
+    // Get the value of isTurn
+    const isTurn = player ? player.isTurn : false; // null if no matching player is found
+    //console.log(`isTurn: ${isTurn} | ${player}`);
+    if (!isTurn) return;
     if (!tiles[row][col].player) {
-      let playerIndex = players.findIndex((p) => p.clientId === clientID);
-      if (playerIndex < 0) playerIndex = null;
 
       socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
       setTiles((prevTiles) => {
@@ -188,18 +192,20 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
       transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
     };
 
-    if (tile.player) {
-      return {
-        ...baseStyle,
-        backgroundImage: `url(${IMAGE_URL})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'repeat',
-        cursor: 'not-allowed',
-        border: 'none',
-        borderRadius: '0',
-      };
-    }
+   if (tile.player) {
+  return {
+    ...baseStyle,
+    backgroundImage: `url(${IMAGE_URL})`,
+    backgroundColor: "rgba(0, 0, 255, 0.3)", // Blue overlay
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "repeat",
+    backgroundBlendMode: "multiply", // Try: overlay, screen, darken, etc.
+    cursor: "not-allowed",
+    border: "none",
+    borderRadius: "0",
+  };
+}
 
     if (tile.enabled) {
       return {
@@ -293,7 +299,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         </div>
       </div>
 
-      {/* Zoom sliders */}
+      {/* Zoom sliders
       {isLandscape ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginLeft: '24px', height: '500px', width: '1%' }}>
           <label htmlFor="zoom-slider-vertical" style={{ marginBottom: '8px', fontWeight: 'bold', writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}>Zoom</label>
@@ -305,7 +311,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
             step={0.01}
             value={scale}
             onChange={(e) => setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(e.target.value))))}
-            style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical', width: '320px', height: '75vh', marginBottom: '8px' }}
+            style={{ writingMode: 'vertical-lr', direction: 'rtl', width: '320px', height: '75vh', marginBottom: '8px' }}
           />
           <span style={{ marginTop: '8px' }}>{(scale * 100).toFixed(0)}%</span>
         </div>
@@ -324,7 +330,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
           />
           <span style={{ marginLeft: '12px' }}>{(scale * 100).toFixed(0)}%</span>
         </div>
-      )}
+      )} */}
     </div>
   );
 });

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Board from './Board.jsx';
 import { motion } from "framer-motion";
-
+import { playerColors, defaultColors, getColor } from "./colors";
 // Helper for responsive board size
 const getBoardContainerStyle = () => ({
   position: 'relative',
@@ -23,7 +23,7 @@ const userSelectNoneStyle = {
   MozUserSelect: 'none',
 };
 
-const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
+const GameScreen = ({ clientID, playerName, players, onLobby, onExit, handleStartGame, gameStarted }) => {
   const boardRef = useRef();
   const [uiMinimized, setUiMinimized] = useState(false);
 
@@ -66,9 +66,14 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
         alignItems: 'center',
         position: 'relative',
         overflow: 'hidden',
+        fontFamily: "MedievalSharp",
+        userSelect: 'none',           // disables text selection
+        WebkitUserSelect: 'none',     // Safari
+        MozUserSelect: 'none',        // Firefox
+        msUserSelect: 'none',         // IE/Edge
       }}
     >
-     {/* UI Overlay */}
+      {/* UI Overlay */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -106,6 +111,43 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
         >
           X
         </button>
+        {players.map((p, idx) => (
+          <div
+            key={idx}
+            style={{
+              pointerEvents: 'auto',
+              marginRight: '1rem',
+              marginTop: '1rem',
+              background: `${getColor(idx)}`,
+              borderRadius: '8px',
+              padding: uiMinimized ? '0.5rem 0.7rem' : '0.75rem 1rem',
+              minWidth: uiMinimized ? 'auto' : 'auto',
+              textAlign: 'left',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+              transition: 'padding 0.2s, min-width 0.2s',
+              position: 'relative',
+            }}
+          >
+            <div>
+              <strong>{p.name}</strong>
+            </div>
+
+            {/* underline */}
+            <div
+              style={{
+                display: p.isTurn ? 'block' : 'none',
+                position: 'absolute',
+                bottom: '-6px', // floats under
+                left: '10%',
+                right: '10%',
+                height: '4px',
+                background: `${getColor(idx)}`,
+                borderRadius: '2px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+              }}
+            />
+          </div>
+        ))}
 
         {/* Player List & Recenter & Minimize */}
         <div
@@ -126,9 +168,6 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
           {!uiMinimized ? (
             <>
               <div>
-                <strong>You:</strong> {playerName}
-              </div>
-              <div>
                 <strong>Players:</strong>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {players.map((p, idx) => (
@@ -142,6 +181,26 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
                 style={{
                   marginTop: '0.75rem',
                   padding: '0.4rem 1rem',
+                  fontFamily: "MedievalSharp",
+                  fontSize: '0.95rem',
+                  background: '#3b9774',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: gameStarted ? 'none' : 'auto',
+                  ...userSelectNoneStyle,
+                }}
+                onClick={handleStartGame}
+              >
+                Start Game
+              </button>
+              <button
+                style={{
+                  marginTop: '0.75rem',
+                  padding: '0.4rem 1rem',
+                  fontFamily: "MedievalSharp",
                   fontSize: '0.95rem',
                   background: '#3b9774',
                   color: '#fff',
@@ -193,10 +252,10 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
             </button>
           )}
         </div>
-      </motion.div>
+      </motion.div >
 
       {/* Board Container - Always Square, fills available space */}
-      <div ref={boardContainerRef} style={getBoardContainerStyle()}>
+      < div ref={boardContainerRef} style={getBoardContainerStyle()} >
         <Board
           ref={boardRef}
           size={21}
@@ -206,8 +265,8 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onExit }) => {
           containerWidth={containerSize.width}
           containerHeight={containerSize.height}
         />
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

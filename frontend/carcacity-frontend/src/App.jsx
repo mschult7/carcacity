@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
-import { joinServer, socket } from "./socket"; // Socket.IO client instance
+import { joinServer, socket, setClientId } from "./socket"; // Socket.IO client instance
 import SplashScreen from './SplashScreen.jsx';
 import Lobby from './Lobby.jsx';
 import GameScreen from './GameScreen.jsx';
-
+import { playerColors, defaultColors, getColor } from "./colors";
 const App = () => {
   // Current screen the app should display ("splash", "lobby", or "game")
   const [screen, setScreen] = useState("splash");
@@ -19,6 +19,8 @@ const App = () => {
 
   // Persistent client ID for reconnecting to the server
   const clientId = localStorage.getItem("sessionID");
+  // gameStarted
+  const [gameStarted, setgameStarted] = useState(false);
 
   /**
    * Handle session restoration and live updates of connected users.
@@ -40,21 +42,27 @@ const App = () => {
           // // If not found, clear stored name and go back to splash
           // localStorage.removeItem("playerName");
           // setCurrentName("");
-          setScreen("lobby");
+          //setScreen("lobby");
         }
-      } 
+      }
 
+    };
+    const handlegameStarted = (status) => {
+      console.log(`start accepted: ${status}`);
+      setgameStarted(status);
     };
 
     // Subscribe to the "users" event
     socket.on("users", handleUsers);
-
+    socket.on("gameStarted", handlegameStarted);
     // On reconnect, re-join automatically and request the user list
     socket.on("connect", () => {
       if (currentName && clientId) {
         socket.emit("join", { name: currentName, clientId });
       }
+
       socket.emit("list"); // request the latest list of users
+      socket.emit("status"); // request the latest list of users
     });
 
     // Cleanup subscriptions when component unmounts
@@ -91,13 +99,20 @@ const App = () => {
    * Switch to lobby screen and notify the server.
    */
   const handleLobby = () => {
+     if (!clientId) return;
+    if (!currentName) return;
+    joinServer(currentName);
     socket.emit("updatePage", "lobby");
     setScreen("lobby");
   };
   /**
    * Switch to game screen and notify the server.
    */
-  const handleGame = () => {
+  const handleGame = (name) => {
+    if (!clientId) return;
+    if (!name) return;
+    joinServer(name);
+    setCurrentName(name);
     socket.emit("updatePage", "game");
     setScreen("game");
     socket.emit("getBoard");
@@ -117,6 +132,12 @@ const App = () => {
     localStorage.removeItem("playerName");
     setCurrentName("");
     setScreen("splash");
+  };
+  const handleStartGame = () => {
+    if (!gameStarted) {
+      console.log("start requested");
+      socket.emit("start");
+    }
   };
 
   // Determine if lobby animation should play (only from splash screen)
@@ -141,6 +162,7 @@ const App = () => {
           animateLobby={animateLobby}
           enterGame={handleGame}
           addRobot={addRobot}
+          gameStarted={gameStarted}
 
         />
       )}
@@ -151,6 +173,8 @@ const App = () => {
           players={players}
           onLobby={handleLobby}
           onExit={handleExit}
+          handleStartGame={handleStartGame}
+          gameStarted={gameStarted}
         />
       )}
     </>

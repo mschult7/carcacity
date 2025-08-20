@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from "framer-motion";
 
-const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, addRobot }) => {
+const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, addRobot, gameStarted }) => {
   const [name, setName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -10,8 +10,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
   }, [currentName]);
 
   const isJoined = currentName && players.some(u => u.name === currentName);
-  const canJoin = currentName && (players.length > 0);
-  const canEnterName = name && (players.length < 5 || (isJoined && name === currentName));
+  const canJoin = currentName && (players.length > 0) && (!gameStarted ||isJoined );
+  const availableSpace = (players.length < 5) && !gameStarted;
+  const canEnterName = (!gameStarted || (isJoined && name !== currentName)) && name && (players.length < 5 || (isJoined && name === currentName));
 
   return (
     <div
@@ -29,9 +30,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
       {/* Lobby Title */}
       <a onClick={onExit}>
         <motion.h2
-          initial={animateLobby ? { opacity: 0, x: 0, y: 0, scale: 1 } : { opacity: 1, x: '-40vw', y: '-45vh', scale: 1 }}
+          initial={{ opacity: 1, x: '-40vw', y: '-45vh', scale: 1 }}
           animate={animateLobby ? { opacity: 1, x: '-40vw', y: '-45vh', scale: 1 } : {}}
-          transition={animateLobby ? { duration: 3 } : {}}
+          transition={animateLobby ? { duration: 0 } : {}}
           style={{
             position: 'absolute',
             left: '50%',
@@ -71,6 +72,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             flex: '1 1 auto',
             padding: '0.5rem',
             fontSize: '1rem',
+            fontFamily: "MedievalSharp",
             borderRadius: '8px',
             border: '2px solid white',
             background: 'transparent',
@@ -107,7 +109,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             cursor: canJoin ? "pointer" : "not-allowed",
           }}
           disabled={!canJoin}
-          onClick={enterGame}
+          onClick={() => enterGame(name)}
         >
           Join Game
         </button>
@@ -130,9 +132,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
       </div>
 
       {/* Players List */}
-      <div style={{ marginTop: '2rem', zIndex: 1, textAlign: 'center' }}>
-        <h3 style={{ color: "#fff" }}>Connected Players ({players.length}/5):</h3>
-        <ul style={{ color: "#fff", padding: 0, listStyle: 'none' }}>
+      <div style={{ marginTop: '2rem', zIndex: 1, textAlign: 'center', fontFamily: "MedievalSharp", }}>
+        <h3 style={{ color: "#fff", fontFamily: "MedievalSharp", }}>Connected Players ({players.length}/5):</h3>
+        <ul style={{ color: "#fff", padding: 0, listStyle: 'none', fontFamily: "MedievalSharp", }}>
           {players.map((p, idx) => (
             <li key={idx}>
               {p.name} {p.page && <span style={{ color: '#3b9774' }}>({p.page})</span>}
@@ -162,6 +164,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
           display: 'flex',
           flexDirection: 'column',
           gap: '1rem',
+          fontFamily: "MedievalSharp",
         }}
       >
         {/* Close Button */}
@@ -190,7 +193,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             cursor: 'pointer',
             fontFamily: "MedievalSharp",
             fontWeight: 'bold',
+           cursor: availableSpace ? "pointer" : "not-allowed",
           }}
+          disabled={!availableSpace}
           onClick={addRobot}
         >
           Add Robot
