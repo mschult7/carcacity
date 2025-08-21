@@ -14,6 +14,10 @@ export function joinServer(name) {
   if (!name) return;
   socket.emit("join", { name, clientId });
 }
+export function joinPlayer() {
+  if (!clientId) return;
+  socket.emit("player", {  clientId });
+}
 export function setClientId() {
   if (!clientId) {
     clientId = crypto.randomUUID();

@@ -116,7 +116,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
             <div
               key={idx}
               style={{
-                background: getColor(idx),
+                backgroundColor: `${p.color}`,
                 borderRadius: '8px',
                 padding: '0.5rem 0.7rem',
                 textAlign: 'left',
@@ -132,7 +132,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
                   left: '10%',
                   right: '10%',
                   height: '4px',
-                  background: getColor(idx),
+                  backgroundColor: p.color,
                   borderRadius: '2px',
                 }}
               />

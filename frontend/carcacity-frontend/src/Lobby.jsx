@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from "framer-motion";
-
-const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, addRobot, gameStarted }) => {
+import useLandscape from './useLandscape';
+const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted }) => {
   const [name, setName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -9,6 +9,8 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
     if (currentName) setName(currentName);
   }, [currentName]);
 
+  const idx = players.findIndex(p => p.clientId === clientId);
+  const isLandscape = useLandscape();
   const isJoined = currentName && players.some(u => u.name === currentName);
   const canJoin = currentName && (players.length > 0) && (!gameStarted || isJoined);
   const availableSpace = (players.length < 5) && !gameStarted;
@@ -35,7 +37,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
           transition={animateLobby ? { duration: 0 } : {}}
           style={{
             position: 'absolute',
-            left: '50%',
+            left: isLandscape ? '42%' : '50%',
             top: '50%',
             transform: 'translate(-50%, -50%)',
             fontFamily: "MedievalSharp",
@@ -53,12 +55,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
       <div
         style={{
           zIndex: 1,
-          display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
+          display: 'grid',
+          gridTemplateColumns: '75% 20%',
           gap: '0.5rem',
-          marginTop: '1rem',
           width: '100%',
           maxWidth: '400px',
         }}
@@ -66,10 +65,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
         <input
           type="text"
           placeholder="Enter your name"
-          value={name}
+          value={`Player ${idx + 1}` === name ? "" : name}
           onChange={e => setName(e.target.value)}
           style={{
-            flex: '1 1 auto',
             padding: '0.5rem',
             fontSize: '1rem',
             fontFamily: "MedievalSharp",
@@ -77,9 +75,10 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
             border: '2px solid white',
             background: 'transparent',
             color: 'white',
-            maxWidth: '50vw',
+            maxWidth: '100%',
           }}
         />
+
         <button
           style={{
             padding: "0.5rem 1rem",
@@ -95,8 +94,9 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
           disabled={!canEnterName}
           onClick={() => onJoin(name)}
         >
-          {isJoined ? "Update Name" : "Enter Name"}
+          &#128190;
         </button>
+
         <button
           style={{
             padding: "0.5rem 1rem",
@@ -114,6 +114,7 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
         >
           Join Game
         </button>
+
         <button
           style={{
             padding: "0.5rem 1rem",
@@ -132,19 +133,34 @@ const Lobby = ({ players, onJoin, onExit, currentName, animateLobby, enterGame, 
         </button>
       </div>
 
+
       {/* Players List */}
-      <div style={{ marginTop: '2rem', zIndex: 1, textAlign: 'center', fontFamily: "MedievalSharp", }}>
+      <div style={{ marginTop: '1rem', zIndex: 1, textAlign: 'center', fontFamily: "MedievalSharp", }}>
+        {players.length >= 5 && (
+          <span style={{ color: 'red' }}>Lobby is full!</span>
+        )}
         <h3 style={{ color: "#fff", fontFamily: "MedievalSharp", }}>Connected Players ({players.length}/5):</h3>
         <ul style={{ color: "#fff", padding: 0, listStyle: 'none', fontFamily: "MedievalSharp", }}>
           {players.map((p, idx) => (
             <li key={idx}>
-              {p.name} {p.page && <span style={{ color: '#3b9774' }}>({p.page})</span>}
+              {p.name} {p.page && <span style={{ color: '#3b9774' }}>({p.page})</span>}  <motion.button
+                onClick={() => removePlayer(p.clientId)}
+                style={{
+                  display: gameStarted ? 'none' : 'inline',
+                  alignSelf: 'flex-end',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                }}
+              >
+                X
+              </motion.button>
             </li>
           ))}
         </ul>
-        {players.length >= 5 && (
-          <p style={{ color: 'red' }}>Lobby is full!</p>
-        )}
+
       </div>
 
       {/* Settings Panel */}

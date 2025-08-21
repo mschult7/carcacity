@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { joinServer, socket, setClientId } from "./socket"; // Socket.IO client instance
+import { joinServer, socket, setClientId, joinPlayer } from "./socket"; // Socket.IO client instance
 import SplashScreen from './SplashScreen.jsx';
 import Lobby from './Lobby.jsx';
 import GameScreen from './GameScreen.jsx';
@@ -48,7 +48,6 @@ const App = () => {
 
     };
     const handlegameStarted = (status) => {
-      console.log(`start accepted: ${status}`);
       setgameStarted(status);
     };
 
@@ -99,7 +98,7 @@ const App = () => {
    * Switch to lobby screen and notify the server.
    */
   const handleLobby = () => {
-     if (!clientId) return;
+    if (!clientId) return;
     if (!currentName) return;
     joinServer(currentName);
     socket.emit("updatePage", "lobby");
@@ -119,8 +118,10 @@ const App = () => {
     socket.emit("list");
   };
   const addRobot = () => {
-    console.log("robot");
     socket.emit("robot");
+  };
+  const removePlayer = (clientId) => {
+    socket.emit("remove", { clientId });
   };
 
   /**
@@ -134,15 +135,16 @@ const App = () => {
     setScreen("splash");
   };
   const handleEndGame = () => {
-    setScreen("lobby");
-    socket.emit("clearBoard");
-    socket.emit("clearAll");
+    socket.emit("endGame");
   };
   const handleStartGame = () => {
     if (!gameStarted) {
-      console.log("start requested");
       socket.emit("start");
     }
+  };
+  const handleEnter = () => {
+    joinPlayer();
+    setScreen("lobby");
   };
 
   // Determine if lobby animation should play (only from splash screen)
@@ -156,17 +158,19 @@ const App = () => {
   return (
     <>
       {screen === "splash" && (
-        <SplashScreen onContinue={() => setScreen("lobby")} />
+        <SplashScreen onContinue={handleEnter} />
       )}
       {screen === "lobby" && (
         <Lobby
           players={players}
           onJoin={handleJoin}
           onExit={handleExit}
+          clientId={clientId}
           currentName={currentName}
           animateLobby={animateLobby}
           enterGame={handleGame}
           addRobot={addRobot}
+          removePlayer={removePlayer}
           gameStarted={gameStarted}
 
         />

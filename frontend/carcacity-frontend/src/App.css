@@ -1,4 +1,6 @@
-#root, body {
-    margin: 0;
-    padding: 0;
+html, body, #root {
+  background-color: #000;
+  margin: 0;
+  height: 100%;
+  padding: 0;
 }

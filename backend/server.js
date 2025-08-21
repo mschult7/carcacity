@@ -22,11 +22,48 @@ let board = Array(BOARD_SIZE)
     Array(BOARD_SIZE).fill({ player: null, index: null, enabled: false, sequence: null })
   );
 let enabledTiles = []; // Array to track enabled tiles
+const defaultColors = ['#3b9774', '#ff9671', '#845ec2', '#FFDB58', '#3498db'];
+
+function getColor(idx) {
+  return defaultColors[idx % defaultColors.length];
+}
 clearBoard();
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
 
+  // Register or update user
+  socket.on('player', ({ clientId }) => {
+    if (!clientId) return;
+
+    // Determine join type
+    let joinType = 'joining';
+    if (users[clientId]) {
+      // If user was previously disconnected, it's a rejoin
+      joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
+    }
+
+    const connectedUsers = Object.values(users).filter(u => !u.robot);
+    const userIndex = Object.values(users).length;
+    console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
+    if (connectedUsers.length < 5) {
+      let name = `Player ${connectedUsers.length + 1}`;
+      users[clientId] = {
+        clientId,
+        name,
+        socketId: socket.id,
+        page: users[clientId]?.page || 'lobby',
+        connected: true,
+        robot: false,
+        isTurn: users[clientId]?.isTurn || false,
+        lastTile: users[clientId]?.lastTile || [],
+        color: users[clientId]?.color || getColor(userIndex),
+      };
+
+      console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
+      io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    }
+  });
   // Register or update user
   socket.on('join', ({ name, clientId }) => {
     if (!name || !clientId) return;
@@ -38,6 +75,8 @@ io.on('connection', (socket) => {
       joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
     }
 
+    const userIndex = Object.values(users).length;
+    console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
     users[clientId] = {
       clientId,
       name,
@@ -47,6 +86,7 @@ io.on('connection', (socket) => {
       robot: false,
       isTurn: users[clientId]?.isTurn || false,
       lastTile: users[clientId]?.lastTile || [],
+      color: users[clientId]?.color || getColor(userIndex),
     };
 
     console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
@@ -65,7 +105,8 @@ io.on('connection', (socket) => {
 
       if (robotNumber <= 5) {
         const robotId = `robot_${robotNumber}_${Date.now()}`;
-
+        const userIndex = Object.values(users).length;
+        console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
         users[robotId] = {
           clientId: robotId,
           name: `Robot ${robotNumber}`,
@@ -75,6 +116,7 @@ io.on('connection', (socket) => {
           robot: true,
           isTurn: false,
           lastTile: [],
+          color: getColor(userIndex),
         };
 
         console.log(`Virtual robot added: Robot ${robotNumber} (clientId ${robotId})`);
@@ -93,9 +135,9 @@ io.on('connection', (socket) => {
     gameStarted = true;
 
     for (const [clientId, user] of Object.entries(users)) {
-      if (user.robot && user.page === 'lobby') {
+      if (user.page === 'lobby') {
         user.page = 'game';
-        console.log(`Robot ${user.name} moved to the game page.`);
+        console.log(`${user.name} moved to the game page.`);
       }
     }
 
@@ -121,22 +163,27 @@ io.on('connection', (socket) => {
       console.log(`User ${users[clientId].name} updated page: ${page}`);
     }
   });
-
+  socket.on('remove', (user) => {
+    if (users[user.clientId]) {
+      delete users[user.clientId];
+      io.emit('users', Object.values(users));
+    }
+  });
   socket.on('leave', () => {
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
     if (clientId) {
       console.log(`User left: ${users[clientId].name}`);
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-          if (board[row][col].player === clientId) {
-            board[row][col] = { player: null, index: null, sequence: board[row][col].sequence, enabled: board[row][col].enabled };
-            disableIfValid(row + 1, col);
-            disableIfValid(row - 1, col);
-            disableIfValid(row, col + 1);
-            disableIfValid(row, col - 1);
-          }
-        }
-      }
+      // for (let row = 0; row < BOARD_SIZE; row++) {
+      //   for (let col = 0; col < BOARD_SIZE; col++) {
+      //     if (board[row][col].player === clientId) {
+      //       board[row][col] = { player: null, index: null, sequence: board[row][col].sequence, enabled: board[row][col].enabled };
+      //       disableIfValid(row + 1, col);
+      //       disableIfValid(row - 1, col);
+      //       disableIfValid(row, col + 1);
+      //       disableIfValid(row, col - 1);
+      //     }
+      //   }
+      // }
       delete users[clientId];
     }
     io.emit('users', Object.values(users));
@@ -152,9 +199,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('clearAll', () => {
-    users.forEach(user => {
-      user.page = 'lobby';
+    Object.keys(users).forEach(clientId => {
+      users[clientId].page = "lobby";
     });
+
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
 
     for (const sockId of Object.keys(io.sockets.sockets)) {
@@ -172,16 +220,16 @@ io.on('connection', (socket) => {
   socket.on('clickTile', ({ row, col, player, index }) => {
     if (!player) return;
     if (!board[row][col].player) {
-      console.log(`Tile Clicked: [${row}, ${col}] ${player}`);
-      board[row][col] = { player, index, enabled: false, sequence: sequence };
-      sequence = sequence + 1;
-
       const userIds = Object.keys(users);
       if (usersTurn < 0 || usersTurn >= userIds.length) return;
 
       const currentUserId = userIds[usersTurn];
       users[currentUserId].lastTile = [row, col];
+      console.log(`Tile Clicked: [${row}, ${col}] ${player}`);
+      board[row][col] = { player, index, enabled: false, sequence: sequence, color: users[currentUserId].color, row: row, col: col };
+      sequence = sequence + 1;
 
+      
       enableIfValid(row + 1, col);
       enableIfValid(row - 1, col);
       enableIfValid(row, col + 1);
@@ -215,6 +263,17 @@ io.on('connection', (socket) => {
 
   socket.on('clearBoard', () => {
     clearBoard();
+  });
+  socket.on('endGame', () => {
+    Object.keys(users).forEach(clientId => {
+      users[clientId].page = "lobby";
+    });
+
+    io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    clearBoard();
+    gameStarted = false;
+    io.emit('gameStarted', gameStarted);
+    console.log('Game Ended.');
   });
 
   socket.emit('boardUpdate', board);
@@ -278,13 +337,13 @@ async function robotTurn() {
     const currentUser = users[currentUserId];
 
     if (currentUser && currentUser.robot) {
-      if (lastUser >= 0 && lastUser < userIds.length) {
-        const lastUserId = userIds[lastUser];
-        const lastUserOB = users[lastUserId];
-        if (!lastUserOB.robot) {
-          await sleep(1500); // Add delay after humans
-        }
-      }
+      // if (lastUser >= 0 && lastUser < userIds.length) {
+      //   const lastUserId = userIds[lastUser];
+      //   const lastUserOB = users[lastUserId];
+      //   if (!lastUserOB.robot) {
+      //     await sleep(1500); // clankerTax
+      //   }
+      // }
       console.log(`Robot ${currentUser.name}'s turn`);
 
       if (enabledTiles.length === 0) return;
@@ -298,6 +357,9 @@ async function robotTurn() {
         index: usersTurn,
         enabled: false,
         sequence: sequence,
+        color: currentUser.color,
+        row: row,
+        col: col,
       };
       users[currentUserId].lastTile = [row, col];
 
@@ -311,7 +373,7 @@ async function robotTurn() {
       toggleTurn();
       io.emit('boardUpdate', board);
     }
-  }, 2000);
+  }, 1500);
 }
 
 function toggleTurn() {
