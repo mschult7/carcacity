@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
 import { playerColors, defaultColors, initializeColors } from "./colors";
+import { MotionConfig, motion } from 'framer-motion';
 const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500 }, ref) => {
   const [tiles, setTiles] = useState(
     Array(size)
@@ -174,6 +175,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
     if (!tiles[row][col].player) {
 
       socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
+      socket.emit('list');
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));
         newTiles[row][col] = { player: clientID, index: playerIndex, enabled: false };
@@ -191,7 +193,8 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
       userSelect: 'none',
       transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
     };
-
+    const currentPlayerOb = players.find(p => p.clientId === clientID);
+    const isPlayersTurn = currentPlayerOb.isTurn;
     if (tile.player) {
       let isLastPlayedTile = false;
       const player = players.find(p => p.clientId === tile.player);
@@ -207,110 +210,118 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
       return {
         ...baseStyle,
         backgroundImage: `url(${IMAGE_URL})`,
-        backgroundColor: isLastPlayedTile ? `${tile.color}` : '', // Blue overlay
+        backgroundColor: '', // Blue overlay
+        boxShadow: isLastPlayedTile
+          ? `inset 0 0 0 2px transparent, inset 0 0 0 7px ${tile.color}`
+          : '',
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "repeat",
-        backgroundBlendMode: "multiply", // Try: overlay, screen, darken, etc.
+        backgroundBlendMode: "multiply",
         cursor: "not-allowed",
         border: "none",
         borderRadius: "0",
-    };
-  }
+      };
 
-  if (tile.enabled) {
+    }
+
+    if (tile.enabled && isPlayersTurn) {
+      return {
+        ...baseStyle,
+        backgroundColor: '#555',
+        cursor: 'pointer',
+        border: '2px solid #eee',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.18), 0 1.5px 3px rgba(0,0,0,0.12)',
+        transform: 'translateY(-2px)',
+        borderRadius: '4px',
+        cursor: isPlayersTurn ? "" : "not-allowed",
+        zIndex: '10',
+        
+      };
+    }
+    // Non-enabled, non-player tiles
     return {
       ...baseStyle,
       backgroundColor: '#555',
-      cursor: 'pointer',
-      border: '2px solid #eee',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.18), 0 1.5px 3px rgba(0,0,0,0.12)',
-      transform: 'translateY(-2px)',
-      borderRadius: '4px',
+      cursor: 'not-allowed',
+      border: 'none',
+      borderRadius: '0',
     };
-  }
-  // Non-enabled, non-player tiles
-  return {
-    ...baseStyle,
-    backgroundColor: '#555',
-    cursor: 'not-allowed',
-    border: 'none',
-    borderRadius: '0',
   };
-};
 
-// Prevent browser pinch zoom
-useEffect(() => {
-  const preventPinch = (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); };
-  document.addEventListener('touchmove', preventPinch, { passive: false });
-  document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-  return () => {
-    document.removeEventListener('touchmove', preventPinch);
-    document.removeEventListener('gesturestart', (e) => e.preventDefault());
-  };
-}, []);
+  // Prevent browser pinch zoom
+  useEffect(() => {
+    const preventPinch = (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); };
+    document.addEventListener('touchmove', preventPinch, { passive: false });
+    document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    return () => {
+      document.removeEventListener('touchmove', preventPinch);
+      document.removeEventListener('gesturestart', (e) => e.preventDefault());
+    };
+  }, []);
 
-return (
-  <div
-    style={{
-      background: 'transparent',
-      width: '100vw',
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: isLandscape ? 'row' : 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxSizing: 'border-box',
-      paddingBottom: !isLandscape ? '48px' : '0',
-    }}
-  >
+  return (
     <div
       style={{
-        // width: isLandscape ? '125vh' : '85vw',
-        // height: isLandscape ? '80vh' : '80vw',
-        border: '2px solid #222',
-        overflow: 'hidden',
-        touchAction: 'none',
-        position: 'relative',
+        background: 'transparent',
+        width: '100vw',
+        minHeight: '100vh',
         display: 'flex',
+        flexDirection: isLandscape ? 'row' : 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: dragData.current.isDragging ? 'grabbing' : 'grab',
+        boxSizing: 'border-box',
+        paddingBottom: !isLandscape ? '48px' : '0',
       }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseUp}
-      onMouseUp={handleMouseUp}
-      onWheel={handleWheel}
     >
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${size}, 50px)`,
-          gridTemplateRows: `repeat(${size}, 50px)`,
-          gap: '0',
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-          transformOrigin: '0 0',
-          width: `${size * 50}px`,
-          height: `${size * 50}px`,
+          // width: isLandscape ? '125vh' : '85vw',
+          // height: isLandscape ? '80vh' : '80vw',
+          border: '2px solid #222',
+          overflow: 'hidden',
+          touchAction: 'none',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: dragData.current.isDragging ? 'grabbing' : 'grab',
         }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseUp}
+        onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
       >
-        {tiles.map((row, rowIndex) =>
-          row.map((tile, colIndex) => (
-            <div
-              key={`${rowIndex}-${colIndex}`}
-              onClick={() => { if (tile.enabled && !tile.player) claimTile(rowIndex, colIndex); }}
-              style={getTileStyle(tile)}
-            />
-          ))
-        )}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${size}, 50px)`,
+            gridTemplateRows: `repeat(${size}, 50px)`,
+            gap: '0',
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transformOrigin: '0 0',
+            width: `${size * 50}px`,
+            height: `${size * 50}px`,
+          }}
+        >
+          {tiles.map((row, rowIndex) =>
+            row.map((tile, colIndex) => (
+              <motion.div
+                key={`${rowIndex}-${colIndex}`}
+                onClick={() => { if (tile.enabled && !tile.player) claimTile(rowIndex, colIndex); }}
+                animate={getTileStyle(tile)} // <-- Use animate instead of style
+                transition={{ duration: 0.5, ease: "linear" }} // smooth transition
+              />
+            ))
+          )}
+        </div>
       </div>
-    </div>
 
-    {/* Zoom sliders
+      {/* Zoom sliders
       {isLandscape ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginLeft: '24px', height: '500px', width: '1%' }}>
           <label htmlFor="zoom-slider-vertical" style={{ marginBottom: '8px', fontWeight: 'bold', writingMode: 'vertical-lr', transform: 'rotate(180deg)' }}>Zoom</label>
@@ -342,8 +353,8 @@ return (
           <span style={{ marginLeft: '12px' }}>{(scale * 100).toFixed(0)}%</span>
         </div>
       )} */}
-  </div>
-);
+    </div>
+  );
 });
 
 export default Board;

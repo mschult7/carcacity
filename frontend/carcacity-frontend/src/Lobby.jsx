@@ -204,7 +204,7 @@ const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, e
           style={{
             padding: '0.5rem',
             borderRadius: '6px',
-            background: '#3b9774',
+             background: availableSpace ? '#3b9774' : '#ff4d4d',
             color: '#fff',
             border: 'none',
             color: '#fff',

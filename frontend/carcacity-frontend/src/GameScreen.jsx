@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { getColor } from "./colors";
 import useLandscape from './useLandscape';
 
-
 const getBoardContainerStyle = () => ({
   position: 'relative',
   width: '100vw',
@@ -32,6 +31,24 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
   // Board container
   const boardContainerRef = useRef();
   const [containerSize, setContainerSize] = useState({ width: 500, height: 500 });
+  const [confirmEndGame, setConfirmEndGame] = useState(false); // State to track button clicks
+  const [tileOpened, setTileOpened] = useState(Array(players.length).fill(false));
+
+  const openTileCount = () => {
+    return tileOpened.filter(Boolean).length;
+  }
+
+  const openPlayerTile = (idx) => {
+    setTileOpened(prevState => {
+      // Create a copy of the previous state
+      const newTileOpened = [...prevState];
+      // Toggle the value at the specified index
+      newTileOpened[idx] = !newTileOpened[idx];
+      // Return the updated array
+      return newTileOpened;
+    });
+  };
+
   useEffect(() => {
     const updateSize = () => {
       if (boardContainerRef.current) {
@@ -51,6 +68,14 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
   };
   const handleMinimize = () => setUiMinimized(true);
   const handleRestore = () => setUiMinimized(false);
+
+  const handleEndGameClick = () => {
+    if (confirmEndGame) {
+      onEndGame();
+    } else {
+      setConfirmEndGame(true);
+    }
+  };
 
   return (
     <div
@@ -94,23 +119,21 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
         <div
           style={{
             maxWidth: isLandscape ? '' : '25vw',
-            // overflow: 'hidden',
             display: 'flex',
             flexDirection: isLandscape ? 'row' : 'column',
-            gap: isLandscape ? '0.5rem' : '3rem',
+            gap: isLandscape
+              ? '0.5rem'
+              : `${3 - (2 * Math.min(openTileCount(), 5)) / 5}rem`,
             pointerEvents: 'auto',
             position: isLandscape ? 'static' : 'absolute',
             top: isLandscape ? 'auto' : '2vhs',
             left: isLandscape ? 'auto' : '0.5rem',
             justifyContent: isLandscape ? 'flex-start' : 'flex-start',
-            transform: isLandscape ? 'none' : 'none', // Remove translateY to stop centering
+            alignItems: 'flex-start', // Prevent stretching
           }}
         >
-
           {[
-            // Include the current player first
             ...players.filter((p) => p.clientId === clientID),
-            // Include the rest of the players in their original order
             ...players.filter((p) => p.clientId !== clientID),
           ].map((p, idx) => (
             <div
@@ -121,9 +144,23 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
                 padding: '0.5rem 0.7rem',
                 textAlign: 'left',
                 position: 'relative',
+                overflow: 'hidden', // Ensure content doesn't overflow
+                width: '10vw',
               }}
             >
-              <div><strong>{p.name}</strong></div>
+              <motion.div
+                id={`playerTile_${idx}`}
+                initial={{}}
+                animate={{ height: tileOpened[idx] ? (isLandscape ? '25vh' : '15vh') : '' }} // Independent height
+                transition={{ type: 'spring', stiffness: 150, damping: 40 }}
+                style={{}}
+                onClick={() => openPlayerTile(idx)}
+              >
+                <strong>{p.name}</strong>
+                {tileOpened[idx] && (
+                  <p>#{idx}</p>
+                )}
+              </motion.div>
               <div
                 style={{
                   display: p.isTurn ? 'block' : 'none',
@@ -164,7 +201,15 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
               <button style={btnStyle} onClick={handleRecenter}>Recenter</button>
               <button style={btnStyle} onClick={onLobby}>Lobby</button>
               {gameStarted && (
-                <button style={btnStyle} onClick={onEndGame}>End Game</button>
+                <button
+                  style={{
+                    ...btnStyle,
+                    background: confirmEndGame ? '#ff4d4d' : '#3b9774',
+                  }}
+                  onClick={handleEndGameClick}
+                >
+                  {confirmEndGame ? 'Actually?' : 'End Game'}
+                </button>
               )}
               <button style={minBtnStyle} onClick={handleMinimize} title="Minimize">−</button>
             </>
@@ -205,11 +250,11 @@ const btnStyle = {
 
 const minBtnStyle = {
   fontSize: '0.85rem',
-  background: 'transparent', // let parent show through
+  background: 'transparent',
   color: '#fff',
   border: 'none',
   cursor: 'pointer',
-  opacity: 0.7, // match parent background alpha
+  opacity: 0.7,
 };
 
 export default GameScreen;
