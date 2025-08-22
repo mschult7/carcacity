@@ -61,7 +61,10 @@ io.use((socket, next) => {
 const users = {};
 const spectators = {};
 const BOARD_SIZE = 21;
+const initialROBOT_SPEED = 1500;
+let ROBOT_SPEED = initialROBOT_SPEED;
 let gameStarted = false;
+let checkMate = false;
 let sequence = 0;
 let usersTurn = -1;
 let lastUser = -1;
@@ -77,7 +80,7 @@ let board = Array(BOARD_SIZE)
 let enabledTiles = []; // Array to track enabled tiles
 
 // Player colors (cycled)
-const defaultColors = ['#3b9774', '#ff9671', '#845ec2', '#FFDB58', '#3498db'];
+let defaultColors = ['#3b9774', '#ff9671', '#845ec2', '#FFDB58', '#3498db'];
 
 // Get a color for a given user index
 function getColor(idx) {
@@ -92,7 +95,6 @@ clearBoard();
  * ========================= */
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
-
   /* =========================
    * USER ACTIONS (join/leave, robots, presence, pages)
    * ========================= */
@@ -106,12 +108,17 @@ io.on('connection', (socket) => {
     if (users[clientId]) {
       // If user was previously disconnected, it's a rejoin
       joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
+      if (!users[clientId].connected) {
+        users[clientId].connected = true;
+        users[clientId].robot = false;
+      }
     }
 
     const connectedUsers = Object.values(users).filter(u => !u.robot);
     const userIndex = Object.values(users).length;
-    console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
-    if (connectedUsers.length < 5) {
+    //console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
+    if (userIndex + 1 < 5) {
+      ROBOT_SPEED = initialROBOT_SPEED;
       let name = `Player ${connectedUsers.length + 1}`;
       users[clientId] = {
         clientId,
@@ -123,9 +130,11 @@ io.on('connection', (socket) => {
         isTurn: users[clientId]?.isTurn || false,
         lastTile: users[clientId]?.lastTile || [],
         color: users[clientId]?.color || getColor(userIndex),
+        score: users[clientId]?.score || 0,
+        difficulty: users[clientId]?.difficulty || 0,
       };
 
-      console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
+      console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id}) | player`);
       io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
     } else {
       spectators[clientId] = {
@@ -134,7 +143,14 @@ io.on('connection', (socket) => {
         page: 'game',
         connected: true,
         robot: false,
+        isTurn: false,
+        lastTile: [],
+        color: '',
+        score: 0,
+        difficulty: 0,
       };
+      console.log(`Spectator ${joinType}: (clientId ${clientId}, socket ${socket.id})`);
+      io.emit('spectators', Object.values(spectators));
     }
   });
 
@@ -150,7 +166,7 @@ io.on('connection', (socket) => {
     }
 
     const userIndex = Object.values(users).length;
-    console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
+    //console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
     users[clientId] = {
       clientId,
       name,
@@ -161,9 +177,11 @@ io.on('connection', (socket) => {
       isTurn: users[clientId]?.isTurn || false,
       lastTile: users[clientId]?.lastTile || [],
       color: users[clientId]?.color || getColor(userIndex),
+      score: users[clientId]?.score || 0,
+      difficulty: users[clientId]?.difficulty || 0,
     };
-
-    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
+    ROBOT_SPEED = initialROBOT_SPEED;
+    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id}) | join`);
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
   });
 
@@ -181,7 +199,7 @@ io.on('connection', (socket) => {
       if (robotNumber <= 5) {
         const robotId = `robot_${robotNumber}_${Date.now()}`;
         const userIndex = Object.values(users).length;
-        console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
+        //console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
         users[robotId] = {
           clientId: robotId,
           name: `Robot ${robotNumber}`,
@@ -192,6 +210,8 @@ io.on('connection', (socket) => {
           isTurn: false,
           lastTile: [],
           color: getColor(userIndex),
+          score: 0,
+          difficulty: 1,
         };
 
         console.log(`Virtual robot added: Robot ${robotNumber} (clientId ${robotId})`);
@@ -204,6 +224,17 @@ io.on('connection', (socket) => {
   socket.on('list', () => {
     io.emit('users', Object.values(users));
     io.emit('spectators', Object.values(spectators));
+  });
+
+  socket.on('robotify', () => {
+    Object.keys(users).forEach(clientId => {
+      if (users[clientId].robot !== true) {
+        users[clientId].robot = true;
+        users[clientId].difficulty = 3;
+      }
+    });
+    ROBOT_SPEED = 100;
+    io.emit('users', Object.values(users));
   });
 
   // Update user's current page
@@ -251,9 +282,27 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
     if (clientId) {
-      users[clientId].connected = false;
+      users[clientId] = {
+        clientId,
+        name: users[clientId]?.name,
+        socketId: socket.id,
+        page: users[clientId]?.page,
+        connected: false,
+        robot: false,
+        isTurn: users[clientId]?.isTurn,
+        lastTile: users[clientId]?.lastTile,
+        color: users[clientId]?.color,
+        score: users[clientId]?.score,
+        difficulty: users[clientId]?.difficulty,
+      };
       console.log(`User disconnected: ${users[clientId].name}`);
       io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+      const connectedUsers = Object.values(users).filter(u => !u.robot);
+      const userIndex = Object.values(connectedUsers).length;
+      if (userIndex === 0) {
+        ROBOT_SPEED = initialROBOT_SPEED / 6;
+      }
+
     }
   });
 
@@ -271,6 +320,7 @@ io.on('connection', (socket) => {
     }
 
     for (const id in users) delete users[id];
+    defaultColors = ['#3b9774', '#ff9671', '#845ec2', '#FFDB58', '#3498db'];
     gameStarted = false;
     io.emit('users', []);
     io.emit('gameStarted', gameStarted);
@@ -306,6 +356,7 @@ io.on('connection', (socket) => {
 
   // Report current game status (started/not)
   socket.on('status', () => {
+    io.emit('checkmate', checkMate);
     io.emit('gameStarted', gameStarted);
   });
 
@@ -316,20 +367,9 @@ io.on('connection', (socket) => {
       const userIds = Object.keys(users);
       if (usersTurn < 0 || usersTurn >= userIds.length) return;
 
-      const currentUserId = userIds[usersTurn];
-      users[currentUserId].lastTile = [row, col];
       console.log(`Tile Clicked: [${row}, ${col}] ${player}`);
-      board[row][col] = { player, index, enabled: false, sequence: sequence, color: users[currentUserId].color, row: row, col: col };
-      sequence = sequence + 1;
-
-
-      enableIfValid(row + 1, col);
-      enableIfValid(row - 1, col);
-      enableIfValid(row, col + 1);
-      enableIfValid(row, col - 1);
-      disableIfValid(row, col);
-      toggleTurn();
-      io.emit('boardUpdate', board);
+      var seq = sequence;
+      clickTile(player, index, false, seq, users[player].color, row, col);
     }
   });
 
@@ -371,6 +411,8 @@ io.on('connection', (socket) => {
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
     clearBoard();
     gameStarted = false;
+    checkMate = false;
+    io.emit('checkmate', checkMate);
     io.emit('gameStarted', gameStarted);
     console.log('Game Ended.');
   });
@@ -382,15 +424,131 @@ io.on('connection', (socket) => {
 /* =========================
  * Board and Tile Utilities
  * ========================= */
+//ClickTile
+function clickTile(player, index, enabled, seq, color, row, col) {
+  //console.log(player, index, enabled, seq, color, row, col);
+
+  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0 };
+  users[player].lastTile = [row, col];
+
+  enableIfValid(row + 1, col);
+  enableIfValid(row - 1, col);
+  enableIfValid(row, col + 1);
+  enableIfValid(row, col - 1);
+  checkCount(row + 1, col + 1);
+  checkCount(row + 1, col - 1);
+  checkCount(row - 1, col + 1);
+  checkCount(row - 1, col - 1);
+  disableIfValid(row, col);
+
+  sequence = seq + 1;
+  toggleTurn();
+  let scores = largestConnectedGroups();
+  //console.log(JSON.stringify(scores, null, 2));
+
+  const highestGroupSizes = {};
+  scores.forEach(group => {
+    const { player, groupSize } = group;
+    // Update the highest group size for the player if it's larger than the current value
+    if (!highestGroupSizes[player] || groupSize > highestGroupSizes[player]) {
+      highestGroupSizes[player] = groupSize;
+    }
+  });
+  Object.keys(highestGroupSizes).forEach(group => {
+    users[group].score = highestGroupSizes[group];
+  })
+  io.emit('boardUpdate', board);
+}
+
+function largestConnectedGroups() {
+  const rows = board.length;
+  const cols = board[0].length;
+
+  // Visited set to mark processed tiles
+  const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+  // Directions for edge and diagonal connections
+  const directions = [
+    [-1, 0], [1, 0], [0, -1], [0, 1], // Edge connections
+    [-1, -1], [-1, 1], [1, -1], [1, 1] // Diagonal connections
+  ];
+
+  function isValid(row, col, player) {
+    return (
+      row >= 0 && row < rows &&
+      col >= 0 && col < cols &&
+      !visited[row][col] &&
+      board[row][col].player === player
+    );
+  }
+
+  function dfs(row, col, player) {
+    const stack = [[row, col]];
+    const groupTiles = [];
+    let count = 0;
+
+    while (stack.length > 0) {
+      const [currentRow, currentCol] = stack.pop();
+      if (visited[currentRow][currentCol]) continue;
+
+      visited[currentRow][currentCol] = true;
+      groupTiles.push({ row: currentRow, col: currentCol });
+      count++;
+
+      for (const [dx, dy] of directions) {
+        const newRow = currentRow + dx;
+        const newCol = currentCol + dy;
+        if (isValid(newRow, newCol, player)) {
+          stack.push([newRow, newCol]);
+        }
+      }
+    }
+
+    return { groupSize: count, tiles: groupTiles };
+  }
+
+  const allGroups = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const currentTile = board[row][col];
+      if (!visited[row][col] && currentTile.player && currentTile.player !== 'board') {
+        const groupData = dfs(row, col, currentTile.player);
+        groupData.player = currentTile.player; // Add player to the group data
+        allGroups.push(groupData);
+      }
+    }
+  }
+
+  // Return an array containing all groups with their details
+  return allGroups;
+}
+function countTiles(row, col, player) {
+  let tiles = [];
+  let count = 0;
+  for (let r = row - 1; r <= row + 1; r++) { // Change '<' to '<='
+    for (let c = col - 1; c <= col + 1; c++) { // Change '<' to '<='
+      if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) { // Valid indexes
+        if (board[r][c].player === player) {
+          //console.log(row, col, player, r, c);
+          tiles.push({ row: r, col: c });
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+}
 
 // Safely enable a tile and update enabledTiles array
 function enableIfValid(r, c) {
   if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-    if (board[r][c].sequence === null && !board[r][c].enabled) {
-      board[r][c].enabled = true;
-      enabledTiles.push({ row: r, col: c });
-      //console.log(`adding to enabled tile row:${r} col: ${c}`);
+    if (board[r][c].sequence === null) {
+      if (!board[r][c].enabled) {
+        board[r][c].enabled = true;
+        enabledTiles.push({ row: r, col: c, rank: null });
+        //console.log(`adding to enabled tile row:${r} col: ${c}`);
+      }
     }
+    checkCount(r, c);
   }
 }
 
@@ -403,13 +561,30 @@ function disableIfValid(r, c) {
       // Remove the tile from the array using splice
       //console.log(`splicing from enabled tile (${index}) row:${r} col: ${c}`);
       enabledTiles.splice(index, 1);
-      if (board[r][c].sequence === null && board[r][c].enabled) {
+      checkCount(r, c);
+      if (board[r][c].enabled) {
         board[r][c].enabled = false;
       }
     }
   }
 }
-
+function checkRank(r, c, player) {
+  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+    if (board[r][c].sequence === null || board[r][c].sequence < 0) {
+      const rank = countTiles(r, c, player);
+      const enabledTileindex = enabledTiles.findIndex(tile => tile.row === r && tile.col === c);
+      enabledTiles[enabledTileindex].rank = rank;
+      board[r][c].rank = rank;
+    }
+  }
+}
+function checkCount(r, c) {
+  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+    if (board[r][c].sequence >= 0 && !(board[r][c].sequence === null)) {
+      board[r][c].count = countTiles(r, c, board[r][c].player);
+    }
+  }
+}
 // Clear and reinitialize the board state; also resets turn and game flags
 function clearBoard() {
   board = Array(BOARD_SIZE)
@@ -417,7 +592,7 @@ function clearBoard() {
     .map(() =>
       Array(BOARD_SIZE)
         .fill(null)
-        .map(() => ({ player: null, index: null, enabled: false, sequence: null }))
+        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null }))
     );
 
   enabledTiles = [];
@@ -425,7 +600,10 @@ function clearBoard() {
   sequence = 0;
   usersTurn = -1;
   gameStarted = false;
+  checkMate = false;
   io.emit('boardUpdate', board);
+  io.emit('checkmate', checkMate);
+  io.emit('gameStarted', gameStarted);
   console.log('Board cleared');
 }
 
@@ -438,59 +616,94 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Robot loop: every 1.5s, if it's a robot's turn, play a random enabled tile
+// Robot loop: dynamically adjusts speed and ensures proper await functionality
 async function robotTurn() {
-  setInterval(async () => {
+  while (true) {
+    await sleep(ROBOT_SPEED); // Wait for the current robot speed duration
+
     const userIds = Object.keys(users);
-    if (usersTurn < 0 || usersTurn >= userIds.length) return;
+    if (usersTurn < 0 || usersTurn >= userIds.length) continue;
 
     const currentUserId = userIds[usersTurn];
     const currentUser = users[currentUserId];
 
     if (currentUser && currentUser.robot) {
-      // if (lastUser >= 0 && lastUser < userIds.length) {
-      //   const lastUserId = userIds[lastUser];
-      //   const lastUserOB = users[lastUserId];
-      //   if (!lastUserOB.robot) {
-      //     await sleep(1500); // clankerTax
-      //   }
-      // }
-      console.log(`Robot ${currentUser.name}'s turn`);
+      if (enabledTiles.length === 0) continue;
 
-      if (enabledTiles.length === 0) return;
+      // Sort tiles by rank
+      const sortedTiles = [...enabledTiles].sort((a, b) => b.rank - a.rank);
+      const highestRank = sortedTiles[0].rank;
+      const lowestRank = sortedTiles[sortedTiles.length - 1].rank;
 
-      const randomTile = enabledTiles[Math.floor(Math.random() * enabledTiles.length)];
-      const { row, col } = randomTile;
+      // Categorize tiles
+      const tilesWithHighestRank = sortedTiles.filter(tile => tile.rank === highestRank);
+      const tilesWithMiddleRank = sortedTiles.filter(tile => tile.rank > lowestRank && tile.rank < highestRank);
+      const tilesWithLowestRank = sortedTiles.filter(tile => tile.rank === lowestRank);
+
+      // Probability distribution based on difficulty
+      const decision = makeDecision(currentUser.difficulty);
+
+      let selectedTile;
+      if (decision === "best" && tilesWithHighestRank.length > 0) {
+        selectedTile = tilesWithHighestRank[Math.floor(Math.random() * tilesWithHighestRank.length)];
+      } else if (decision === "middle" && tilesWithMiddleRank.length > 0) {
+        selectedTile = tilesWithMiddleRank[Math.floor(Math.random() * tilesWithMiddleRank.length)];
+      } else if (decision === "worst") {
+       selectedTile = tilesWithLowestRank[Math.floor(Math.random() * tilesWithLowestRank.length)];
+      } else if (decision === "random") {
+        selectedTile = enabledTiles[Math.floor(Math.random() * enabledTiles.length)];
+      } else {
+        // Fallback in case of empty categories
+        selectedTile = enabledTiles[Math.floor(Math.random() * enabledTiles.length)];
+      }
+
+      const { row, col, rank } = selectedTile;
 
       console.log(`Robot ${currentUser.name} clicks tile [${row}, ${col}]`);
-      board[row][col] = {
-        player: currentUserId,
-        index: usersTurn,
-        enabled: false,
-        sequence: sequence,
-        color: currentUser.color,
-        row: row,
-        col: col,
-      };
-      users[currentUserId].lastTile = [row, col];
-
-      enableIfValid(row + 1, col);
-      enableIfValid(row - 1, col);
-      enableIfValid(row, col + 1);
-      enableIfValid(row, col - 1);
-
-      disableIfValid(row, col);
-      sequence++;
-      toggleTurn();
-      io.emit('boardUpdate', board);
+      clickTile(currentUserId, usersTurn, false, sequence, currentUser.color, row, col);
     }
-  }, 1500);
-}
+  }
 
+}
+/**
+* Determines the decision based on the difficulty level.
+* @param {number} difficulty - The difficulty level of the robot (0 = easy, 1 = medium, 2 = hard).
+* @returns {string} The decision: "best", "middle", or "random".
+*/
+function makeDecision(difficulty) {
+  const randomChance = Math.random();
+  switch (difficulty) {
+    case 3: //god mode
+    return "best";
+    case 2: // Hard difficulty
+       if (randomChance < 0.7) return "best"; // 70% chance for the best move
+       if (randomChance < 0.9) return "middle"; // 20% chance for a middle-ranked move
+       if (randomChance < 0.95) return "random"; // 10% chance for a random move
+      return "worst"; // 10% chance for a worst ranked
+    case 1: // Medium difficulty
+      if (randomChance < 0.05) return "best"; // 5% chance for the best move
+      if (randomChance < 0.50) return "worst"; // 45% chance for a middle-ranked move
+      if (randomChance < 0.65) return "middle"; // 15% chance for a middle-ranked move
+      return "random"; // 15% chance for a random move
+    case 0: // Easy difficulty
+    default:
+      return "random"; // Always make a random move
+  }
+}
 // Advance to the next user's turn and broadcast
 function toggleTurn() {
   const userIds = Object.keys(users);
   lastUser = usersTurn;
+  if (enabledTiles.length === 0 && gameStarted) {
+    if (lastUser >= 0) {
+      const lastUserId = userIds[lastUser];
+      users[lastUserId].isTurn = false;
+    }
+    checkMate = true;
+    io.emit('checkmate', checkMate);
+    io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    return;
+  }
   if (usersTurn < 0) {
     usersTurn = 0;
   } else if (usersTurn < userIds.length - 1) {
@@ -500,13 +713,18 @@ function toggleTurn() {
   }
   //console.log(JSON.stringify(enabledTiles, null, 2));
   //console.log(`lastUser: ${lastUser} | usersTurn: ${usersTurn} | userId: ${userIds[usersTurn]}`);
+  const turnUserId = userIds[usersTurn];
+  enabledTiles.forEach(tile => {
+    checkRank(tile.row, tile.col, turnUserId);
+  });
   if (userIds.length >= usersTurn + 1 && usersTurn !== lastUser) {
-    const turnUserId = userIds[usersTurn];
+
     users[turnUserId].isTurn = true;
     if (lastUser >= 0) {
       const lastUserId = userIds[lastUser];
       users[lastUserId].isTurn = false;
     }
+
     io.emit('turn', {
       userName: users[turnUserId]?.name, // Pass only the user's name
       usersTurn: usersTurn // Include the usersTurn variable

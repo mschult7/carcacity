@@ -24,7 +24,7 @@ const userSelectNoneStyle = {
   MozUserSelect: 'none',
 };
 
-const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleStartGame, gameStarted }) => {
+const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleStartGame, gameStarted, isSpectator, checkMate }) => {
   const boardRef = useRef();
   const [uiMinimized, setUiMinimized] = useState(false);
   const isLandscape = useLandscape();
@@ -144,21 +144,22 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
                 padding: '0.5rem 0.7rem',
                 textAlign: 'left',
                 position: 'relative',
-                overflow: 'hidden', // Ensure content doesn't overflow
-                width: '10vw',
+                width: isLandscape ? '10vw' : '17vw',
               }}
             >
               <motion.div
                 id={`playerTile_${idx}`}
                 initial={{}}
                 animate={{ height: tileOpened[idx] ? (isLandscape ? '25vh' : '15vh') : '' }} // Independent height
-                transition={{ type: 'spring', stiffness: 150, damping: 40 }}
-                style={{}}
+                transition={{ type: 'spring', stiffness: 200, damping: 30 }}
+                style={{
+                  overflow: 'hidden',// Ensure content doesn't overflow
+                }}
                 onClick={() => openPlayerTile(idx)}
               >
                 <strong>{p.name}</strong>
                 {tileOpened[idx] && (
-                  <p>#{idx}</p>
+                  <p>{p.score}</p>
                 )}
               </motion.div>
               <div
@@ -195,12 +196,14 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
           {!uiMinimized ? (
             <>
               <div><strong>Menu</strong></div>
-              {!gameStarted && (
+              {!gameStarted && !isSpectator && (
                 <button style={btnStyle} onClick={handleStartGame}>Start Game</button>
               )}
               <button style={btnStyle} onClick={handleRecenter}>Recenter</button>
-              <button style={btnStyle} onClick={onLobby}>Lobby</button>
-              {gameStarted && (
+              {!isSpectator && (
+                <button style={btnStyle} onClick={onLobby}>Lobby</button>
+              )}
+              {gameStarted && !isSpectator && (
                 <button
                   style={{
                     ...btnStyle,
@@ -229,6 +232,8 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onEndGame, handleS
           players={players}
           containerWidth={containerSize.width}
           containerHeight={containerSize.height}
+          isSpectator={isSpectator}
+          checkMate={checkMate}
         />
       </div>
     </div>

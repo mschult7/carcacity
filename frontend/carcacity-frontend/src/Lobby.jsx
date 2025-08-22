@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from "framer-motion";
 import useLandscape from './useLandscape';
-const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted }) => {
+const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted, isSpectator }) => {
   const [name, setName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -14,7 +14,7 @@ const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, e
   const isJoined = currentName && players.some(u => u.name === currentName);
   const canJoin = currentName && (players.length > 0) && (!gameStarted || isJoined);
   const availableSpace = (players.length < 5) && !gameStarted;
-  const canEnterName = (!gameStarted || (isJoined && name !== currentName)) && name && (players.length < 5 || (isJoined && name === currentName));
+  const canEnterName = true;
 
   return (
     <div
@@ -89,9 +89,8 @@ const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, e
             background: "transparent",
             border: "2px solid white",
             borderRadius: "8px",
-            cursor: canEnterName ? "pointer" : "not-allowed",
+            cursor: "pointer",
           }}
-          disabled={!canEnterName}
           onClick={() => onJoin(name)}
         >
           &#128190;
@@ -204,7 +203,7 @@ const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, e
           style={{
             padding: '0.5rem',
             borderRadius: '6px',
-             background: availableSpace ? '#3b9774' : '#ff4d4d',
+            background: availableSpace ? '#3b9774' : '#ff4d4d',
             color: '#fff',
             border: 'none',
             color: '#fff',

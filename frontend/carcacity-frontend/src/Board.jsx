@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { socket } from './socket';
 import { playerColors, defaultColors, initializeColors } from "./colors";
 import { MotionConfig, motion } from 'framer-motion';
-const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500 }, ref) => {
+const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate }, ref) => {
   const [tiles, setTiles] = useState(
     Array(size)
       .fill(null)
@@ -194,7 +194,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
       transition: 'border 0.2s, opacity 0.2s, box-shadow 0.2s, transform 0.2s',
     };
     const currentPlayerOb = players.find(p => p.clientId === clientID);
-    const isPlayersTurn = currentPlayerOb.isTurn;
+    const isPlayersTurn = currentPlayerOb?.isTurn || false;
     if (tile.player) {
       let isLastPlayedTile = false;
       const player = players.find(p => p.clientId === tile.player);
@@ -206,6 +206,19 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         ) {
           isLastPlayedTile = true;
         }
+      }
+      if (checkMate) {
+        return {
+          ...baseStyle,
+          backgroundColor: `${tile.color}`, // Blue overlay
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "repeat",
+          backgroundBlendMode: "multiply",
+          cursor: "not-allowed",
+          border: "none",
+          borderRadius: "0",
+        };
       }
       return {
         ...baseStyle,
@@ -236,7 +249,7 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         borderRadius: '4px',
         cursor: isPlayersTurn ? "" : "not-allowed",
         zIndex: '10',
-        
+
       };
     }
     // Non-enabled, non-player tiles
@@ -312,9 +325,15 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
             row.map((tile, colIndex) => (
               <motion.div
                 key={`${rowIndex}-${colIndex}`}
-                onClick={() => { if (tile.enabled && !tile.player) claimTile(rowIndex, colIndex); }}
+                onClick={() => {
+                  if (tile.enabled && !tile.player) claimTile(rowIndex, colIndex);
+                }}
                 animate={getTileStyle(tile)} // <-- Use animate instead of style
                 transition={{ duration: 0.5, ease: "linear" }} // smooth transition
+                style={{
+                  pointerEvents: tile.enabled ? "auto" : "none", // Disable pointer events for disabled tiles
+                  boxShadow: tile.enabled ? "0px 4px 6px rgba(0, 0, 0, 0.1)" : "none", // Remove shadow for disabled tiles
+                }}
               />
             ))
           )}

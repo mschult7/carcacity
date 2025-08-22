@@ -10,6 +10,8 @@ const App = () => {
 
   // List of all connected players received from the server
   const [players, setPlayers] = useState([]);
+  // List of all connected spectators received from the server
+  const [spectators, setSpectators] = useState([]);
 
   // Current player's name, restored from localStorage if available
   const [currentName, setCurrentName] = useState(localStorage.getItem("playerName") || "");
@@ -21,6 +23,7 @@ const App = () => {
   const clientId = localStorage.getItem("sessionID");
   // gameStarted
   const [gameStarted, setgameStarted] = useState(false);
+  const [checkMate, setCheckMate] = useState(false);
 
   /**
    * Handle session restoration and live updates of connected users.
@@ -30,14 +33,42 @@ const App = () => {
   useEffect(() => {
     const handleUsers = (userList) => {
       setPlayers(userList);
+      //console.log(JSON.stringify(players, null, 2));
       socket.emit("getBoard");
       if (clientId) {
         const me = userList.find((u) => u.clientId === clientId);
-
         if (me) {
           // If found on server, restore player's name and page
+          if (userList.some(u => !u.connected)) {
+            console.log(Date.now());
+            console.log(JSON.stringify(userList.filter(u => !u.connected), null, 2));
+          }
+          if (!me.connected) {
+            console.log(me.name);
+            joinServer(me.name);
+          }
           setCurrentName(me.name);
           setScreen(me.page || "lobby");
+        } else {
+          // // If not found, clear stored name and go back to splash
+          // localStorage.removeItem("playerName");
+          // setCurrentName("");
+          //setScreen("lobby");
+        }
+      }
+
+    };
+    const handleSpectators = (spectatorList) => {
+      setSpectators(spectatorList);
+      //console.log(JSON.stringify(spectators, null, 2));
+      socket.emit("getBoard");
+      if (clientId) {
+        //console.log(clientId);
+        //console.log(JSON.stringify(spectatorList, null, 2));
+        const me = spectatorList.find((u) => u.clientId === clientId);
+
+        if (me) {
+          setScreen(me.page || "game");
         } else {
           // // If not found, clear stored name and go back to splash
           // localStorage.removeItem("playerName");
@@ -51,9 +82,17 @@ const App = () => {
       setgameStarted(status);
     };
 
+    const handlecheckMate = (status) => {
+      setCheckMate(status);
+    };
+
     // Subscribe to the "users" event
     socket.on("users", handleUsers);
+    socket.on("spectators", handleSpectators);
     socket.on("gameStarted", handlegameStarted);
+    socket.on("checkmate", handlecheckMate);
+
+
     // On reconnect, re-join automatically and request the user list
     socket.on("connect", () => {
       if (currentName && clientId) {
@@ -63,11 +102,24 @@ const App = () => {
       socket.emit("list"); // request the latest list of users
       socket.emit("status"); // request the latest list of users
     });
-
+    const interval = setInterval(() => {
+      if (clientId) {
+        const me = players.find((u) => u.clientId === clientId);
+        if (me) {
+          // If found on server, restore player's name and page
+          if (!me.connected) {
+            //console.log(JSON.stringify(players, null, 2));
+            //joinServer(me.name);
+            //socket.emit("list");
+          }
+        }
+      }
+    }, 500);
     // Cleanup subscriptions when component unmounts
     return () => {
       socket.off("users", handleUsers);
       socket.off("connect");
+      clearInterval(interval);
     };
   }, [currentName, clientId]);
 
@@ -79,7 +131,7 @@ const App = () => {
     const interval = setInterval(() => {
       socket.emit("list");
       socket.emit("getBoard");
-    }, 5000);
+    }, 500);
 
     return () => clearInterval(interval); // cleanup interval on unmount
   }, []);
@@ -144,9 +196,8 @@ const App = () => {
   };
   const handleEnter = () => {
     joinPlayer();
-    setScreen("lobby");
   };
-
+  const isSpectator = spectators.some(s => s.clientId === clientId);
   // Determine if lobby animation should play (only from splash screen)
   const animateLobby = prevScreen.current === "splash";
 
@@ -172,6 +223,7 @@ const App = () => {
           addRobot={addRobot}
           removePlayer={removePlayer}
           gameStarted={gameStarted}
+          isSpectator={isSpectator}
 
         />
       )}
@@ -184,6 +236,8 @@ const App = () => {
           onEndGame={handleEndGame}
           handleStartGame={handleStartGame}
           gameStarted={gameStarted}
+          isSpectator={isSpectator}
+          checkMate={checkMate}
         />
       )}
     </>
