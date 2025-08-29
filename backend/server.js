@@ -54,48 +54,149 @@ io.use((socket, next) => {
   next();
 });
 /* =========================
- * Global State and Helpers
+ * Game Class - Encapsulates game state and logic
  * ========================= */
+class Game {
+  constructor(lobbyId) {
+    this.lobbyId = lobbyId;
+    this.users = {};
+    this.spectators = {};
+    this.BOARD_SIZE_INIT = 9;
+    this.BOARD_SIZE = this.BOARD_SIZE_INIT;
+    this.initialROBOT_SPEED = 1500;
+    this.ROBOT_SPEED = this.initialROBOT_SPEED;
+    this.gameStarted = false;
+    this.checkMate = false;
+    this.sequence = 0;
+    this.usersTurn = -1;
+    this.lastUser = -1;
+    this.enabledTiles = [];
+    this.defaultColors = ['#3b9774', '#ff9671', '#845ec2', '#FFDB58', '#3498db'];
+    
+    // Initialize board
+    this.board = Array(this.BOARD_SIZE)
+      .fill(null)
+      .map(() =>
+        Array(this.BOARD_SIZE).fill({ player: null, index: null, enabled: false, sequence: null })
+      );
+    
+    this.clearBoard();
+  }
 
-// Map clientId -> { name, socketId, page, connected }
-const users = {};
-const spectators = {};
-const BOARD_SIZE_INIT = 9;
-let BOARD_SIZE = BOARD_SIZE_INIT;
-const initialROBOT_SPEED = 1500;
-let ROBOT_SPEED = initialROBOT_SPEED;
-let gameStarted = false;
-let checkMate = false;
-let sequence = 0;
-let usersTurn = -1;
-let lastUser = -1;
+  getColor(idx) {
+    return this.defaultColors.shift();
+  }
 
-// Initial board scaffold (will be reset by clearBoard() below)
-let board = Array(BOARD_SIZE)
-  .fill(null)
-  .map(() =>
-    Array(BOARD_SIZE).fill({ player: null, index: null, enabled: false, sequence: null })
-  );
+  clearBoard() {
+    this.board = Array(this.BOARD_SIZE)
+      .fill(null)
+      .map(() =>
+        Array(this.BOARD_SIZE)
+          .fill(null)
+          .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null }))
+      );
 
-// Tracks which tiles can be clicked next
-let enabledTiles = []; // Array to track enabled tiles
+    this.enabledTiles = [];
 
-// Player colors (cycled)
-let defaultColors = ['#3b9774', '#ff9671', '#845ec2', '#FFDB58', '#3498db'];
-
-// Get a color for a given user index
-function getColor(idx) {
-  return defaultColors.shift();
+    let middleIndex = (this.BOARD_SIZE - 1) / 2;
+    this.board[middleIndex][middleIndex] = { player: 'board', index: -1 };
+    this.sequence = 0;
+    this.usersTurn = -1;
+    this.gameStarted = false;
+    this.checkMate = false;
+    
+    // Emit to all sockets in this lobby
+    io.emit('boardUpdate', this.board);
+    io.emit('checkmate', this.checkMate);
+    io.emit('gameStarted', this.gameStarted);
+    console.log(`Board cleared for lobby ${this.lobbyId}`);
+  }
 }
 
-// Initialize board and broadcast initial state
-clearBoard();
+/* =========================
+ * Multi-Lobby Management
+ * ========================= */
+const lobbies = {};
+const MAX_LOBBIES = 5;
+
+// Initialize lobbies
+for (let i = 1; i <= MAX_LOBBIES; i++) {
+  lobbies[i] = new Game(i);
+}
+
+// Helper to get game instance for a lobby
+function getGame(lobbyId) {
+  return lobbies[lobbyId] || lobbies[1]; // Default to lobby 1 if not specified
+}
+
+// Helper to get the current game for a socket
+function getCurrentGame(socket) {
+  return getGame(socket.currentLobby);
+}
+
+// Create global references for backward compatibility with existing functions
+function getGlobalRefs() {
+  const game = getGame(1); // Default to lobby 1
+  return {
+    users: game.users,
+    spectators: game.spectators,
+    BOARD_SIZE: game.BOARD_SIZE,
+    ROBOT_SPEED: game.ROBOT_SPEED,
+    gameStarted: game.gameStarted,
+    checkMate: game.checkMate,
+    sequence: game.sequence,
+    usersTurn: game.usersTurn,
+    lastUser: game.lastUser,
+    enabledTiles: game.enabledTiles,
+    board: game.board,
+    defaultColors: game.defaultColors,
+    initialROBOT_SPEED: game.initialROBOT_SPEED
+  };
+}
 
 /* =========================
  * Socket.IO Connection
  * ========================= */
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
+  
+  // Default lobby assignment (lobby 1) for backward compatibility
+  socket.currentLobby = 1;
+  
+  /* =========================
+   * LOBBY MANAGEMENT
+   * ========================= */
+  
+  // Join a specific lobby
+  socket.on('joinLobby', ({ lobbyId }) => {
+    if (lobbyId >= 1 && lobbyId <= MAX_LOBBIES) {
+      socket.currentLobby = lobbyId;
+      const game = getCurrentGame(socket);
+      console.log(`Socket ${socket.id} joined lobby ${lobbyId}`);
+      
+      // Send current lobby state
+      socket.emit('lobbyJoined', { lobbyId, gameStarted: game.gameStarted });
+      socket.emit('boardUpdate', game.board);
+      socket.emit('gameStarted', game.gameStarted);
+      socket.emit('checkmate', game.checkMate);
+    }
+  });
+  
+  // Get lobby list
+  socket.on('getLobbyList', () => {
+    const lobbyList = [];
+    for (let i = 1; i <= MAX_LOBBIES; i++) {
+      const game = getGame(i);
+      lobbyList.push({
+        id: i,
+        playerCount: Object.keys(game.users).length,
+        gameStarted: game.gameStarted,
+        spectatorCount: Object.keys(game.spectators).length
+      });
+    }
+    socket.emit('lobbyList', lobbyList);
+  });
+  
   /* =========================
    * USER ACTIONS (join/leave, robots, presence, pages)
    * ========================= */
@@ -103,36 +204,37 @@ io.on('connection', (socket) => {
   // Register or update user (auto-named Player N)
   socket.on('player', ({ clientId }) => {
     if (!clientId) return;
+    const game = getCurrentGame(socket);
     let addUserNeeded = true;
-    const userIndex = Object.values(users).length;
+    const userIndex = Object.values(game.users).length;
     let name = `Player ${userIndex + 1}`;
-    if (users[clientId]) {
-      users[clientId].lastSeen = Date.now();
+    if (game.users[clientId]) {
+      game.users[clientId].lastSeen = Date.now();
       // If user was previously disconnected, it's a rejoin
-      if (!users[clientId].connected) {
+      if (!game.users[clientId].connected) {
         addUserNeeded = false;
-        users[clientId].connected = true;
-        users[clientId].robot = false;
+        game.users[clientId].connected = true;
+        game.users[clientId].robot = false;
       }
 
-      if (users[clientId].socketId === socket.id) {
+      if (game.users[clientId].socketId === socket.id) {
         addUserNeeded = false;
       }
     }
-    if (userIndex + 1 <= 5 && (!gameStarted || checkMate) && addUserNeeded) {
+    if (userIndex + 1 <= 5 && (!game.gameStarted || game.checkMate) && addUserNeeded) {
 
-      if (spectators[clientId]) {
-        delete spectators[clientId];
+      if (game.spectators[clientId]) {
+        delete game.spectators[clientId];
       }
-      addUser(clientId, socket.id, name);
+      addUser(clientId, socket.id, name, game);
     } else {
-      if (spectators[clientId]) {
-        if (spectators[clientId].socketId !== socket.id) {
+      if (game.spectators[clientId]) {
+        if (game.spectators[clientId].socketId !== socket.id) {
           addUserNeeded = false;
         }
       }
       if (addUserNeeded) {
-        addSpectator(clientId, socket.id);
+        addSpectator(clientId, socket.id, game);
       }
     }
   });
@@ -165,51 +267,51 @@ io.on('connection', (socket) => {
       }
     }
   });
-  function addUser(clientId, socketId, name) {
+  function addUser(clientId, socketId, name, game) {
     // Determine join type
     let joinType = 'joining';
-    if (users[clientId]) {
+    if (game.users[clientId]) {
       // If user was previously disconnected, it's a rejoin
-      joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
+      joinType = game.users[clientId].connected === false ? 'rejoining' : 'joining';
     }
-    const userIndex = Object.values(users).length;
-    users[clientId] = {
+    const userIndex = Object.values(game.users).length;
+    game.users[clientId] = {
       clientId,
       name,
       socketId: socketId,
-      page: users[clientId]?.page || 'lobby',
+      page: game.users[clientId]?.page || 'lobby',
       connected: true,
       robot: false,
-      isTurn: users[clientId]?.isTurn || false,
-      lastTile: users[clientId]?.lastTile || [],
-      color: users[clientId]?.color || getColor(userIndex),
-      score: users[clientId]?.score || 0,
-      difficulty: users[clientId]?.difficulty || 0,
+      isTurn: game.users[clientId]?.isTurn || false,
+      lastTile: game.users[clientId]?.lastTile || [],
+      color: game.users[clientId]?.color || game.getColor(userIndex),
+      score: game.users[clientId]?.score || 0,
+      difficulty: game.users[clientId]?.difficulty || 0,
       lastSeen: Date.now(),
     };
-    ROBOT_SPEED = initialROBOT_SPEED;
-    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
-    io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    game.ROBOT_SPEED = game.initialROBOT_SPEED;
+    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id}, lobby ${game.lobbyId})`);
+    io.emit('users', Object.entries(game.users).map(([id, u]) => ({ clientId: id, ...u })));
 
   }
-  function addSpectator(clientId, socketId) {
+  function addSpectator(clientId, socketId, game) {
     // Determine join type
     let joinType = 'joining';
 
     // If user was previously disconnected, it's a rejoin
-    if (users[clientId] || spectators[clientId]) {
-      if (users[clientId]) {
-        joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
+    if (game.users[clientId] || game.spectators[clientId]) {
+      if (game.users[clientId]) {
+        joinType = game.users[clientId].connected === false ? 'rejoining' : 'joining';
       } else {
-        joinType = spectators[clientId].connected === false ? 'rejoining' : 'joining';
+        joinType = game.spectators[clientId].connected === false ? 'rejoining' : 'joining';
       }
 
 
     }
-    spectators[clientId] = {
+    game.spectators[clientId] = {
       clientId,
       socketId: socketId,
-      page: spectators[clientId]?.page || 'game',
+      page: game.spectators[clientId]?.page || 'game',
       connected: true,
       robot: false,
       isTurn: false,
@@ -219,8 +321,8 @@ io.on('connection', (socket) => {
       difficulty: 0,
       lastSeen: Date.now(),
     };
-    console.log(`Spectator ${joinType}: (clientId ${clientId}, socket ${socket.id})`);
-    io.emit('spectators', Object.values(spectators));
+    console.log(`Spectator ${joinType}: (clientId ${clientId}, socket ${socket.id}, lobby ${game.lobbyId})`);
+    io.emit('spectators', Object.values(game.spectators));
   }
   // Add a robot user (virtual player)
   socket.on('robot', () => {
@@ -644,28 +746,10 @@ function checkCount(r, c) {
   }
 }
 // Clear and reinitialize the board state; also resets turn and game flags
-function clearBoard() {
-  board = Array(BOARD_SIZE)
-    .fill(null)
-    .map(() =>
-      Array(BOARD_SIZE)
-        .fill(null)
-        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null }))
-    );
-
-  enabledTiles = [];
-
-  let middleIndex = (BOARD_SIZE - 1) / 2;
-  //console.log(middleIndex);
-  board[middleIndex][middleIndex] = { player: 'board', index: -1 };
-  sequence = 0;
-  usersTurn = -1;
-  gameStarted = false;
-  checkMate = false;
-  io.emit('boardUpdate', board);
-  io.emit('checkmate', checkMate);
-  io.emit('gameStarted', gameStarted);
-  console.log('Board cleared');
+function clearBoard(game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  gameInstance.clearBoard();
 }
 
 /* =========================
@@ -680,19 +764,20 @@ function sleep(ms) {
 // Robot loop: dynamically adjusts speed and ensures proper await functionality
 async function robotTurn() {
   while (true) {
-    await sleep(ROBOT_SPEED); // Wait for the current robot speed duration
+    const game = getGame(1); // Default to lobby 1 for now
+    await sleep(game.ROBOT_SPEED); // Wait for the current robot speed duration
 
-    const userIds = Object.keys(users);
-    if (usersTurn < 0 || usersTurn >= userIds.length) continue;
+    const userIds = Object.keys(game.users);
+    if (game.usersTurn < 0 || game.usersTurn >= userIds.length) continue;
 
-    const currentUserId = userIds[usersTurn];
-    const currentUser = users[currentUserId];
+    const currentUserId = userIds[game.usersTurn];
+    const currentUser = game.users[currentUserId];
 
     if (currentUser && currentUser.robot) {
-      if (enabledTiles.length === 0) continue;
+      if (game.enabledTiles.length === 0) continue;
 
       // Sort tiles by rank
-      const sortedTiles = [...enabledTiles].sort((a, b) => b.rank - a.rank);
+      const sortedTiles = [...game.enabledTiles].sort((a, b) => b.rank - a.rank);
       const highestRank = sortedTiles[0].rank;
       const lowestRank = sortedTiles[sortedTiles.length - 1].rank;
 
@@ -712,16 +797,16 @@ async function robotTurn() {
       } else if (decision === "worst") {
         selectedTile = tilesWithLowestRank[Math.floor(Math.random() * tilesWithLowestRank.length)];
       } else if (decision === "random") {
-        selectedTile = enabledTiles[Math.floor(Math.random() * enabledTiles.length)];
+        selectedTile = game.enabledTiles[Math.floor(Math.random() * game.enabledTiles.length)];
       } else {
         // Fallback in case of empty categories
-        selectedTile = enabledTiles[Math.floor(Math.random() * enabledTiles.length)];
+        selectedTile = game.enabledTiles[Math.floor(Math.random() * game.enabledTiles.length)];
       }
 
       const { row, col, rank } = selectedTile;
 
       console.log(`Robot ${currentUser.name} clicks tile [${row}, ${col}]`);
-      clickTile(currentUserId, usersTurn, false, sequence, currentUser.color, row, col);
+      clickTile(currentUserId, game.usersTurn, false, game.sequence, currentUser.color, row, col);
     }
   }
 
