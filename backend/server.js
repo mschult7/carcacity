@@ -11,7 +11,7 @@ const { Server } = require('socket.io');
 
 // Import configuration and middleware
 const config = require('./config/server-config');
-const { rateLimitMiddleware } = require('./middleware/rate-limiter');
+const { rateLimitMiddleware } = require('./config/rate-limiter');
 
 // Import controllers
 const userController = require('./controllers/user-controller');

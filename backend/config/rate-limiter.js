@@ -3,7 +3,7 @@
  * Prevents abuse by limiting requests per IP
  */
 
-const config = require('../config/server-config');
+const config = require('./server-config');
 
 // Store request counts per IP
 const rateLimit = {};
