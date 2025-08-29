@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from "framer-motion";
 import useLandscape from './useLandscape';
-const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted, isSpectator, boardSize, onSetBoardSize, }) => {
+const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted, isSpectator, boardSize, onSetBoardSize, currentLobby }) => {
   const [name, setName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -73,7 +73,7 @@ const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobb
             zIndex: 2,
           }}
         >
-          Carcacity
+          Carcacity {currentLobby ? `- Lobby ${currentLobby}` : ''}
         </motion.h2>
       </a>
 
@@ -232,8 +232,6 @@ const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobb
             background: availableSpace ? '#3b9774' : '#ff4d4d',
             color: '#fff',
             border: 'none',
-            color: '#fff',
-            cursor: 'pointer',
             fontFamily: "MedievalSharp",
             fontWeight: 'bold',
             cursor: availableSpace ? "pointer" : "not-allowed",

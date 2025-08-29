@@ -5,7 +5,7 @@ let clientId = localStorage.getItem("sessionID");
 setClientId();
 
 // Connect to Socket.IO server
-export const socket = io("https://panther01.ddns.net", {
+export const socket = io("http://localhost:3001", {
   path: "/cityapi",
 });
 
@@ -41,4 +41,21 @@ export function onUsersUpdate(callback) {
 // Optional: leave server
 export function leaveServer() {
   socket.emit("leave");
+}
+
+// Lobby management functions
+export function joinLobby(lobbyId) {
+  socket.emit("joinLobby", { lobbyId });
+}
+
+export function getLobbyList() {
+  socket.emit("getLobbyList");
+}
+
+export function onLobbyJoined(callback) {
+  socket.on("lobbyJoined", callback);
+}
+
+export function onLobbyList(callback) {
+  socket.on("lobbyList", callback);
 }
