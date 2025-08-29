@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
-import { playerColors, defaultColors, initializeColors } from "./colors";
+import { playerColors, defaultColors, getColor } from "./colors";
 import { MotionConfig, motion } from 'framer-motion';
 const Board = forwardRef(({ clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate }, ref) => {
 

@@ -19,7 +19,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   path: '/cityapi',
-  cors: { origin: 'https://panther01.ddns.net' },
+  cors: { origin: ['https://panther01.ddns.net', 'http://localhost:5173'] },
 });
 /* =========================
  * Rate Limiting (Per-IP)
@@ -361,15 +361,16 @@ io.on('connection', (socket) => {
 
   // Broadcast current users list
   socket.on('list', () => {
-    const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
-    if(users[clientId]){
-      users[clientId].lastSeen = Date.now();
+    const game = getCurrentGame(socket);
+    const clientId = Object.keys(game.users).find(id => game.users[id].socketId === socket.id);
+    if(game.users[clientId]){
+      game.users[clientId].lastSeen = Date.now();
     }
-    if(spectators[clientId]){
-      spectators[clientId].lastSeen = Date.now();
+    if(game.spectators[clientId]){
+      game.spectators[clientId].lastSeen = Date.now();
     }
-    io.emit('users', Object.values(users));
-    io.emit('spectators', Object.values(spectators));
+    io.emit('users', Object.values(game.users));
+    io.emit('spectators', Object.values(game.spectators));
   });
 
   socket.on('robotify', () => {
@@ -534,13 +535,15 @@ io.on('connection', (socket) => {
     io.emit('boardUpdate', game.board);
   });
   socket.on('getBoardSize', () => {
-    io.emit('boardSize', BOARD_SIZE);
+    const game = getCurrentGame(socket);
+    io.emit('boardSize', game.BOARD_SIZE);
   });
   socket.on('size', (size) => {
+    const game = getCurrentGame(socket);
     //console.log(size.size);
-    BOARD_SIZE = size.size;
-    io.emit('boardSize', BOARD_SIZE);
-    clearBoard();
+    game.BOARD_SIZE = size.size;
+    io.emit('boardSize', game.BOARD_SIZE);
+    game.clearBoard();
   });
   // Return current turn info to clients
   socket.on('getTurn', () => {
@@ -582,7 +585,8 @@ io.on('connection', (socket) => {
   });
 
   // Send initial board state on connect
-  socket.emit('boardUpdate', board);
+  const game = getCurrentGame(socket);
+  socket.emit('boardUpdate', game.board);
 });
 
 /* =========================

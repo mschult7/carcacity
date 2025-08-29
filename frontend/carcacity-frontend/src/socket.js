@@ -5,7 +5,7 @@ let clientId = localStorage.getItem("sessionID");
 setClientId();
 
 // Connect to Socket.IO server
-export const socket = io("https://panther01.ddns.net", {
+export const socket = io("http://localhost:3001", {
   path: "/cityapi",
 });
 
