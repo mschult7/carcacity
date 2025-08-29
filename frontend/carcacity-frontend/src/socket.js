@@ -18,6 +18,10 @@ export function joinPlayer() {
   if (!clientId) return;
   socket.emit("player", {  clientId });
 }
+export function setSize(size) {
+  if (!size) return;
+  socket.emit("size", { size });
+}
 export function setClientId() {
   if (!clientId) {
     clientId = crypto.randomUUID();

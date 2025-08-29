@@ -60,7 +60,8 @@ io.use((socket, next) => {
 // Map clientId -> { name, socketId, page, connected }
 const users = {};
 const spectators = {};
-const BOARD_SIZE = 21;
+const BOARD_SIZE_INIT = 9;
+let BOARD_SIZE = BOARD_SIZE_INIT;
 const initialROBOT_SPEED = 1500;
 let ROBOT_SPEED = initialROBOT_SPEED;
 let gameStarted = false;
@@ -102,75 +103,80 @@ io.on('connection', (socket) => {
   // Register or update user (auto-named Player N)
   socket.on('player', ({ clientId }) => {
     if (!clientId) return;
-
-    // Determine join type
-    let joinType = 'joining';
+    let addUserNeeded = true;
+    const userIndex = Object.values(users).length;
+    let name = `Player ${userIndex + 1}`;
     if (users[clientId]) {
+      users[clientId].lastSeen = Date.now();
       // If user was previously disconnected, it's a rejoin
-      joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
       if (!users[clientId].connected) {
+        addUserNeeded = false;
         users[clientId].connected = true;
         users[clientId].robot = false;
       }
+
+      if (users[clientId].socketId === socket.id) {
+        addUserNeeded = false;
+      }
     }
+    if (userIndex + 1 <= 5 && (!gameStarted || checkMate) && addUserNeeded) {
 
-    const connectedUsers = Object.values(users).filter(u => !u.robot);
-    const userIndex = Object.values(users).length;
-    //console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
-    if (userIndex + 1 < 5) {
-      ROBOT_SPEED = initialROBOT_SPEED;
-      let name = `Player ${connectedUsers.length + 1}`;
-      users[clientId] = {
-        clientId,
-        name,
-        socketId: socket.id,
-        page: users[clientId]?.page || 'lobby',
-        connected: true,
-        robot: false,
-        isTurn: users[clientId]?.isTurn || false,
-        lastTile: users[clientId]?.lastTile || [],
-        color: users[clientId]?.color || getColor(userIndex),
-        score: users[clientId]?.score || 0,
-        difficulty: users[clientId]?.difficulty || 0,
-      };
-
-      console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id}) | player`);
-      io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+      if (spectators[clientId]) {
+        delete spectators[clientId];
+      }
+      addUser(clientId, socket.id, name);
     } else {
-      spectators[clientId] = {
-        clientId,
-        socketId: socket.id,
-        page: 'game',
-        connected: true,
-        robot: false,
-        isTurn: false,
-        lastTile: [],
-        color: '',
-        score: 0,
-        difficulty: 0,
-      };
-      console.log(`Spectator ${joinType}: (clientId ${clientId}, socket ${socket.id})`);
-      io.emit('spectators', Object.values(spectators));
+      if (spectators[clientId]) {
+        if (spectators[clientId].socketId !== socket.id) {
+          addUserNeeded = false;
+        }
+      }
+      if (addUserNeeded) {
+        addSpectator(clientId, socket.id);
+      }
     }
   });
 
   // Register or update user (custom name)
   socket.on('join', ({ name, clientId }) => {
     if (!name || !clientId) return;
+    let addUserNeeded = true;
+    const userIndex = Object.values(users).length;
+    if ((userIndex + 1 <= 5 && !gameStarted) || users[clientId]) {
+      //console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
+      if (users[clientId]) {
 
+        if (users[clientId].socketId === socket.id && users[clientId].name === name) {
+          users[clientId].lastSeen = Date.now();
+          addUserNeeded = false;
+        }
+      }
+      if (addUserNeeded) {
+        addUser(clientId, socket.id, name);
+      }
+
+    } else {
+      if (spectators[clientId]) {
+        if (spectators[clientId].socketId !== socket.id) {
+          addSpectator(clientId, socket.id);
+        }else{
+          spectators[clientId].lastSeen = Date.now();
+        }
+      }
+    }
+  });
+  function addUser(clientId, socketId, name) {
     // Determine join type
     let joinType = 'joining';
     if (users[clientId]) {
       // If user was previously disconnected, it's a rejoin
       joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
     }
-
     const userIndex = Object.values(users).length;
-    //console.log(`index: ${userIndex} | ${defaultColors[userIndex % defaultColors.length]}`);
     users[clientId] = {
       clientId,
       name,
-      socketId: socket.id,
+      socketId: socketId,
       page: users[clientId]?.page || 'lobby',
       connected: true,
       robot: false,
@@ -179,12 +185,43 @@ io.on('connection', (socket) => {
       color: users[clientId]?.color || getColor(userIndex),
       score: users[clientId]?.score || 0,
       difficulty: users[clientId]?.difficulty || 0,
+      lastSeen: Date.now(),
     };
     ROBOT_SPEED = initialROBOT_SPEED;
-    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id}) | join`);
+    console.log(`User ${joinType}: ${name} (clientId ${clientId}, socket ${socket.id})`);
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
-  });
 
+  }
+  function addSpectator(clientId, socketId) {
+    // Determine join type
+    let joinType = 'joining';
+
+    // If user was previously disconnected, it's a rejoin
+    if (users[clientId] || spectators[clientId]) {
+      if (users[clientId]) {
+        joinType = users[clientId].connected === false ? 'rejoining' : 'joining';
+      } else {
+        joinType = spectators[clientId].connected === false ? 'rejoining' : 'joining';
+      }
+
+
+    }
+    spectators[clientId] = {
+      clientId,
+      socketId: socketId,
+      page: spectators[clientId]?.page || 'game',
+      connected: true,
+      robot: false,
+      isTurn: false,
+      lastTile: [],
+      color: '',
+      score: 0,
+      difficulty: 0,
+      lastSeen: Date.now(),
+    };
+    console.log(`Spectator ${joinType}: (clientId ${clientId}, socket ${socket.id})`);
+    io.emit('spectators', Object.values(spectators));
+  }
   // Add a robot user (virtual player)
   socket.on('robot', () => {
     const connectedUsers = Object.values(users).filter(u => u.connected);
@@ -222,6 +259,13 @@ io.on('connection', (socket) => {
 
   // Broadcast current users list
   socket.on('list', () => {
+    const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
+    if(users[clientId]){
+      users[clientId].lastSeen = Date.now();
+    }
+    if(spectators[clientId]){
+      spectators[clientId].lastSeen = Date.now();
+    }
     io.emit('users', Object.values(users));
     io.emit('spectators', Object.values(spectators));
   });
@@ -241,6 +285,7 @@ io.on('connection', (socket) => {
   socket.on('updatePage', (page) => {
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
     if (clientId) {
+      users[clientId].lastSeen = Date.now();
       users[clientId].page = page;
       io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
       console.log(`User ${users[clientId].name} updated page: ${page}`);
@@ -294,6 +339,7 @@ io.on('connection', (socket) => {
         color: users[clientId]?.color,
         score: users[clientId]?.score,
         difficulty: users[clientId]?.difficulty,
+        lastSeen: users[clientId]?.lastSeen,
       };
       console.log(`User disconnected: ${users[clientId].name}`);
       io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
@@ -333,10 +379,13 @@ io.on('connection', (socket) => {
 
   // Start the game: move lobby users to game, enable initial tiles, set first turn
   socket.on('start', () => {
+    clearBoard();
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
     console.log(`User ${users[clientId].name} started the game.`);
     gameStarted = true;
-
+    checkMate = false
+    usersTurn = -1;
+    lastUser = -1;
     for (const [clientId, user] of Object.entries(users)) {
       if (user.page === 'lobby') {
         user.page = 'game';
@@ -344,13 +393,14 @@ io.on('connection', (socket) => {
       }
     }
 
-    enableIfValid(11, 10);
-    enableIfValid(9, 10);
-    enableIfValid(10, 11);
-    enableIfValid(10, 9);
+    const middleIndex = (BOARD_SIZE - 1) / 2;
+    enableIfValid(middleIndex + 1, middleIndex);
+    enableIfValid(middleIndex - 1, middleIndex);
+    enableIfValid(middleIndex, middleIndex + 1);
+    enableIfValid(middleIndex, middleIndex - 1);
 
     toggleTurn();
-
+    io.emit('checkmate', checkMate);
     io.emit('gameStarted', gameStarted);
   });
 
@@ -377,7 +427,15 @@ io.on('connection', (socket) => {
   socket.on('getBoard', () => {
     io.emit('boardUpdate', board);
   });
-
+  socket.on('getBoardSize', () => {
+    io.emit('boardSize', BOARD_SIZE);
+  });
+  socket.on('size', (size) => {
+    //console.log(size.size);
+    BOARD_SIZE = size.size;
+    io.emit('boardSize', BOARD_SIZE);
+    clearBoard();
+  });
   // Return current turn info to clients
   socket.on('getTurn', () => {
     //console.log(JSON.stringify(users, null, 2));
@@ -596,7 +654,10 @@ function clearBoard() {
     );
 
   enabledTiles = [];
-  board[10][10] = { player: 'board', index: -1 };
+
+  let middleIndex = (BOARD_SIZE - 1) / 2;
+  //console.log(middleIndex);
+  board[middleIndex][middleIndex] = { player: 'board', index: -1 };
   sequence = 0;
   usersTurn = -1;
   gameStarted = false;
@@ -649,7 +710,7 @@ async function robotTurn() {
       } else if (decision === "middle" && tilesWithMiddleRank.length > 0) {
         selectedTile = tilesWithMiddleRank[Math.floor(Math.random() * tilesWithMiddleRank.length)];
       } else if (decision === "worst") {
-       selectedTile = tilesWithLowestRank[Math.floor(Math.random() * tilesWithLowestRank.length)];
+        selectedTile = tilesWithLowestRank[Math.floor(Math.random() * tilesWithLowestRank.length)];
       } else if (decision === "random") {
         selectedTile = enabledTiles[Math.floor(Math.random() * enabledTiles.length)];
       } else {
@@ -674,11 +735,11 @@ function makeDecision(difficulty) {
   const randomChance = Math.random();
   switch (difficulty) {
     case 3: //god mode
-    return "best";
+      return "best";
     case 2: // Hard difficulty
-       if (randomChance < 0.7) return "best"; // 70% chance for the best move
-       if (randomChance < 0.9) return "middle"; // 20% chance for a middle-ranked move
-       if (randomChance < 0.95) return "random"; // 10% chance for a random move
+      if (randomChance < 0.7) return "best"; // 70% chance for the best move
+      if (randomChance < 0.9) return "middle"; // 20% chance for a middle-ranked move
+      if (randomChance < 0.95) return "random"; // 10% chance for a random move
       return "worst"; // 10% chance for a worst ranked
     case 1: // Medium difficulty
       if (randomChance < 0.05) return "best"; // 5% chance for the best move
@@ -700,8 +761,19 @@ function toggleTurn() {
       users[lastUserId].isTurn = false;
     }
     checkMate = true;
-    io.emit('checkmate', checkMate);
+    gameStarted = false;
+    Object.keys(users).forEach(clientId => {
+      const user = users[clientId];
+      if (user.robot && !user.connected) {
+        user.robot = false;
+      }
+    });
+
+
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    io.emit('checkmate', checkMate);
+    io.emit('gameStarted', gameStarted);
+
     return;
   }
   if (usersTurn < 0) {

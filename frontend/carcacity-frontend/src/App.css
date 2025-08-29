@@ -4,3 +4,41 @@ html, body, #root {
   height: 100%;
   padding: 0;
 }
+input[type="range"]::-webkit-slider-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+input[type="range"]::-ms-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+/* Optional: increase hit area for easier touch */
+input[type="range"] {
+  touch-action: manipulation;
+  /* Padding can help for mobile, but test for overflow */
+}
+
+@media (max-width: 600px) {
+  input[type="range"]::-webkit-slider-thumb {
+    width: 48px;
+    height: 48px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 48px;
+    height: 48px;
+  }
+  input[type="range"]::-ms-thumb {
+    width: 48px;
+    height: 48px;
+  }
+}

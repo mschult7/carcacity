@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { joinServer, socket, setClientId, joinPlayer } from "./socket"; // Socket.IO client instance
+import { joinServer, socket, setClientId, joinPlayer, setSize } from "./socket"; // Socket.IO client instance
 import SplashScreen from './SplashScreen.jsx';
 import Lobby from './Lobby.jsx';
 import GameScreen from './GameScreen.jsx';
@@ -16,6 +16,7 @@ const App = () => {
   // Current player's name, restored from localStorage if available
   const [currentName, setCurrentName] = useState(localStorage.getItem("playerName") || "");
 
+  const [boardSize, setBoardSize] = useState(0);
   // Keeps track of the previous screen to handle animations
   const prevScreen = useRef(null);
 
@@ -40,11 +41,11 @@ const App = () => {
         if (me) {
           // If found on server, restore player's name and page
           if (userList.some(u => !u.connected)) {
-            console.log(Date.now());
-            console.log(JSON.stringify(userList.filter(u => !u.connected), null, 2));
+            //console.log(Date.now());
+            //console.log(JSON.stringify(userList.filter(u => !u.connected), null, 2));
           }
           if (!me.connected) {
-            console.log(me.name);
+            //console.log(me.name);
             joinServer(me.name);
           }
           setCurrentName(me.name);
@@ -81,6 +82,10 @@ const App = () => {
     const handlegameStarted = (status) => {
       setgameStarted(status);
     };
+    const handleBoardSize = (size) => {
+      //console.log(size);
+      setBoardSize(size);
+    };
 
     const handlecheckMate = (status) => {
       setCheckMate(status);
@@ -91,7 +96,7 @@ const App = () => {
     socket.on("spectators", handleSpectators);
     socket.on("gameStarted", handlegameStarted);
     socket.on("checkmate", handlecheckMate);
-
+    socket.on("boardSize", handleBoardSize);
 
     // On reconnect, re-join automatically and request the user list
     socket.on("connect", () => {
@@ -129,8 +134,10 @@ const App = () => {
    */
   useEffect(() => {
     const interval = setInterval(() => {
+      
       socket.emit("list");
       socket.emit("getBoard");
+      socket.emit("getBoardSize");
     }, 500);
 
     return () => clearInterval(interval); // cleanup interval on unmount
@@ -140,10 +147,16 @@ const App = () => {
    * Called when a player joins with a name.
    * Saves the name locally, updates state, and notifies the server.
    */
-  const handleJoin = (name) => {
+  const handleSaveName = (name) => {
     if (!name) return;
-    joinServer(name);
     setCurrentName(name);
+    joinServer(name);
+  
+  };
+
+  const onSetBoardSize = (size) => {
+    if (!size) return;
+    setSize(size);
   };
 
   /**
@@ -153,6 +166,15 @@ const App = () => {
     if (!clientId) return;
     if (!currentName) return;
     joinServer(currentName);
+    socket.emit("updatePage", "lobby");
+    setScreen("lobby");
+  };
+  /**
+  * Switch to lobby screen and notify the server.
+  */
+  const onSpecJoin = () => {
+    if (!clientId) return;
+    joinPlayer();
     socket.emit("updatePage", "lobby");
     setScreen("lobby");
   };
@@ -214,7 +236,7 @@ const App = () => {
       {screen === "lobby" && (
         <Lobby
           players={players}
-          onJoin={handleJoin}
+          onSaveName={handleSaveName}
           onExit={handleExit}
           clientId={clientId}
           currentName={currentName}
@@ -224,6 +246,8 @@ const App = () => {
           removePlayer={removePlayer}
           gameStarted={gameStarted}
           isSpectator={isSpectator}
+          boardSize={boardSize}
+          onSetBoardSize={onSetBoardSize}
 
         />
       )}
@@ -233,6 +257,7 @@ const App = () => {
           playerName={currentName}
           players={players}
           onLobby={handleLobby}
+          onSpecJoin={onSpecJoin}
           onEndGame={handleEndGame}
           handleStartGame={handleStartGame}
           gameStarted={gameStarted}

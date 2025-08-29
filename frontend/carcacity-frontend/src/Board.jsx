@@ -2,7 +2,10 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { socket } from './socket';
 import { playerColors, defaultColors, initializeColors } from "./colors";
 import { MotionConfig, motion } from 'framer-motion';
-const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate }, ref) => {
+const Board = forwardRef(({ clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate }, ref) => {
+
+  const [size, setSize] = useState(21);
+
   const [tiles, setTiles] = useState(
     Array(size)
       .fill(null)
@@ -48,78 +51,180 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
 
 
   useEffect(() => {
-    socket.on('boardUpdate', (newBoard) => setTiles(newBoard));
+    socket.on('boardUpdate', (newBoard) => {
+      if (newBoard[0]) {
+        setSize(newBoard[0].length);
+      }
+      setTiles(newBoard)
+    });
     return () => socket.off('boardUpdate');
   }, []);
 
-  // ------------------------------
-  // Drag & Zoom Handling
-  // ------------------------------
-  const dragData = useRef({
-    isDragging: false,
-    startX: 0,
-    startY: 0,
-    lastOffset: { x: 0, y: 0 },
-  });
+  // Helpers
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const getDistance = (t0, t1) => {
+  const dx = t0.clientX - t1.clientX;
+  const dy = t0.clientY - t1.clientY;
+  return Math.hypot(dx, dy);
+};
+const getMidpoint = (t0, t1) => ({
+  x: (t0.clientX + t1.clientX) / 2,
+  y: (t0.clientY + t1.clientY) / 2,
+});
 
-  const touchData = useRef({
-    lastTouchCenter: { x: 0, y: 0 },
-    lastOffset: { x: 0, y: 0 },
-    lastDistance: 0,
-  });
+// ------------------------------
+// Drag & Zoom Handling (React)
+// ------------------------------
+// Assumes you have:
+// const [scale, setScale] = useState(1);
+// const [offset, setOffset] = useState({ x: 0, y: 0 });
+// const MIN_SCALE = 0.5, MAX_SCALE = 4 (for example)
 
-  // Touch events
-  const handleTouchStart = (e) => {
-    if (e.touches.length === 1) {
-      dragData.current.isDragging = true;
-      dragData.current.startX = e.touches[0].clientX;
-      dragData.current.startY = e.touches[0].clientY;
-      dragData.current.lastOffset = { ...offset };
-    } else if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      touchData.current.lastDistance = Math.hypot(dx, dy);
-      touchData.current.lastTouchCenter = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      };
-      touchData.current.lastOffset = { ...offset };
+const EPS = 0.0001;
+const sensitivityPower = 0.5; // 0.35–0.6 feels native; tweak to taste
+
+// Avoid stale state in handlers
+const scaleRef = useRef(scale);
+const offsetRef = useRef(offset);
+useEffect(() => { scaleRef.current = scale; }, [scale]);
+useEffect(() => { offsetRef.current = offset; }, [offset]);
+
+const dragData = useRef({
+  active: false,
+  startX: 0,
+  startY: 0,
+  lastOffset: { x: 0, y: 0 },
+});
+
+const pinchData = useRef({
+  active: false,
+  initialScale: 1,
+  initialOffset: { x: 0, y: 0 },
+  initialDistance: 1,
+  initialMidpoint: { x: 0, y: 0 },
+});
+
+// Touch events
+const handleTouchStart = (e) => {
+  // If you are not using CSS 'touch-action: none', you may rely on preventDefault in move.
+  if (e.touches.length === 1) {
+    // Start/continue drag
+    const t0 = e.touches[0];
+    dragData.current.active = true;
+    dragData.current.startX = t0.clientX;
+    dragData.current.startY = t0.clientY;
+    dragData.current.lastOffset = { ...offsetRef.current };
+  } else if (e.touches.length === 2) {
+    // Initialize a pinch session
+    const [t0, t1] = e.touches;
+    const dist = Math.max(getDistance(t0, t1), EPS);
+    const mid = getMidpoint(t0, t1);
+
+    pinchData.current.active = true;
+    pinchData.current.initialScale = scaleRef.current;
+    pinchData.current.initialOffset = { ...offsetRef.current };
+    pinchData.current.initialDistance = dist;
+    pinchData.current.initialMidpoint = mid;
+
+    // End any active drag when pinch starts
+    dragData.current.active = false;
+  }
+};
+
+const handleTouchMove = (e) => {
+  // Important: ensure your interactive element has CSS: touch-action: none;
+  // If you attach native listeners, they must be { passive: false } to allow preventDefault.
+  e.preventDefault();
+
+  if (e.touches.length === 1 && dragData.current.active) {
+    // 1-finger pan
+    const t0 = e.touches[0];
+    const dx = t0.clientX - dragData.current.startX;
+    const dy = t0.clientY - dragData.current.startY;
+
+    setOffset({
+      x: dragData.current.lastOffset.x + dx,
+      y: dragData.current.lastOffset.y + dy,
+    });
+    return;
+  }
+
+  if (e.touches.length === 2) {
+    // 2-finger pinch-zoom with anchoring
+    const [t0, t1] = e.touches;
+    const dist = Math.max(getDistance(t0, t1), EPS);
+    const mid = getMidpoint(t0, t1);
+
+    // If pinch wasn't initialized (edge case), initialize now
+    if (!pinchData.current.active) {
+      pinchData.current.active = true;
+      pinchData.current.initialScale = scaleRef.current;
+      pinchData.current.initialOffset = { ...offsetRef.current };
+      pinchData.current.initialDistance = dist;
+      pinchData.current.initialMidpoint = mid;
     }
-  };
 
-  const handleTouchMove = (e) => {
-    e.preventDefault();
-    if (e.touches.length === 1 && dragData.current.isDragging) {
-      const dx = e.touches[0].clientX - dragData.current.startX;
-      const dy = e.touches[0].clientY - dragData.current.startY;
-      setOffset({
-        x: dragData.current.lastOffset.x + dx,
-        y: dragData.current.lastOffset.y + dy,
-      });
-    } else if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.hypot(dx, dy);
+    const ratio = dist / Math.max(pinchData.current.initialDistance, EPS);
+    const targetScale = pinchData.current.initialScale * Math.pow(ratio, sensitivityPower);
+    const newScale = clamp(targetScale, MIN_SCALE, MAX_SCALE);
 
-      // Dialed-down pinch sensitivity
-      const pinchSensitivity = 0.075; // smaller = less sensitive/smoother
-      const scaleFactor = 1 + (distance - touchData.current.lastDistance) / touchData.current.lastDistance * pinchSensitivity;
+    // Keep the world point that was under the initial midpoint anchored under the current midpoint
+    const p0 = {
+      x:
+        (pinchData.current.initialMidpoint.x - pinchData.current.initialOffset.x) /
+        Math.max(pinchData.current.initialScale, EPS),
+      y:
+        (pinchData.current.initialMidpoint.y - pinchData.current.initialOffset.y) /
+        Math.max(pinchData.current.initialScale, EPS),
+    };
 
-      let newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * scaleFactor));
+    const newOffset = {
+      x: mid.x - p0.x * newScale,
+      y: mid.y - p0.y * newScale,
+    };
 
-      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      const offsetX = touchData.current.lastOffset.x + (centerX - touchData.current.lastTouchCenter.x) * (1 - scaleFactor);
-      const offsetY = touchData.current.lastOffset.y + (centerY - touchData.current.lastTouchCenter.y) * (1 - scaleFactor);
+    setScale(newScale);
+    setOffset(newOffset);
+    return;
+  }
+};
 
-      setScale(newScale);
-      setOffset({ x: offsetX, y: offsetY });
-    }
-  };
+const handleTouchEnd = (e) => {
+  // If no touches remain, reset sessions
+  if (e.touches.length === 0) {
+    dragData.current.active = false;
+    pinchData.current.active = false;
+    return;
+  }
 
-  const handleTouchEnd = () => {
-    dragData.current.isDragging = false;
-  };
+  // If one touch remains, switch to drag seamlessly
+  if (e.touches.length === 1) {
+    const t0 = e.touches[0];
+    dragData.current.active = true;
+    dragData.current.startX = t0.clientX;
+    dragData.current.startY = t0.clientY;
+    dragData.current.lastOffset = { ...offsetRef.current };
+    pinchData.current.active = false;
+  }
+};
+
+// Optional: handleTouchCancel same as end
+const handleTouchCancel = handleTouchEnd;
+
+/*
+Usage:
+- Attach to your pinchable element:
+  <div
+    className="pinch-surface"
+    onTouchStart={handleTouchStart}
+    onTouchMove={handleTouchMove}
+    onTouchEnd={handleTouchEnd}
+    onTouchCancel={handleTouchCancel}
+  />
+
+- CSS (important to feel native and avoid browser gestures):
+  .pinch-surface { touch-action: none; }
+*/
 
   // Mouse events
   const handleMouseDown = (e) => {
@@ -279,12 +384,12 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
         background: 'transparent',
         width: '100vw',
         minHeight: '100vh',
-        display: 'flex',
+        //display: 'flex',
         flexDirection: isLandscape ? 'row' : 'column',
         alignItems: 'center',
         justifyContent: 'center',
         boxSizing: 'border-box',
-        paddingBottom: !isLandscape ? '48px' : '0',
+        paddingBottom: '0', //!isLandscape ? '48px' : 
       }}
     >
       <div
@@ -299,10 +404,12 @@ const Board = forwardRef(({ size = 21, clientID, currentPlayer, players, contain
           alignItems: 'center',
           justifyContent: 'center',
           cursor: dragData.current.isDragging ? 'grabbing' : 'grab',
+          height: '100vh',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseUp}

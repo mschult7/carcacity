@@ -1,14 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from "framer-motion";
 import useLandscape from './useLandscape';
-const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted, isSpectator }) => {
+const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobby, enterGame, addRobot, removePlayer, gameStarted, isSpectator, boardSize, onSetBoardSize, }) => {
   const [name, setName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (currentName) setName(currentName);
   }, [currentName]);
+  // Fallback internal state if onSetBoardSize/boardSize aren't provided
+  const clampOdd = (n) => {
+    let x = Math.max(3, Math.min(49, Math.round(Number(n) || 3)));
+    if (x % 2 === 0) x = x + 1 <= 49 ? x + 1 : x - 1;
+    return x;
+  };
+  const [internalBoardSize, setInternalBoardSize] = useState(clampOdd(boardSize ?? 13));
+  useEffect(() => {
+    //console.log(boardSize);
+    if (typeof boardSize === 'number') {
+      setInternalBoardSize(clampOdd(boardSize));
+    }
+  }, [boardSize]);
 
+  const handleBoardSizeChange = (e) => {
+   
+    const raw = typeof e.target.valueAsNumber === 'number' && !Number.isNaN(e.target.valueAsNumber)
+      ? e.target.valueAsNumber
+      : Number(e.target.value);
+    const next = clampOdd(raw);
+    if (typeof onSetBoardSize === 'function') {
+      onSetBoardSize(next);
+    } else {
+      setInternalBoardSize(next);
+    }
+  };
+  const effectiveBoardSize = typeof boardSize === 'number' ? clampOdd(boardSize) : internalBoardSize;
   const idx = players.findIndex(p => p.clientId === clientId);
   const isLandscape = useLandscape();
   const isJoined = currentName && players.some(u => u.name === currentName);
@@ -91,7 +117,7 @@ const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, e
             borderRadius: "8px",
             cursor: "pointer",
           }}
-          onClick={() => onJoin(name)}
+          onClick={() => onSaveName(name)}
         >
           &#128190;
         </button>
@@ -217,6 +243,28 @@ const Lobby = ({ players, onJoin, onExit, clientId, currentName, animateLobby, e
         >
           Add Robot
         </button>
+        {/* Board Size Slider (odd values 3..49) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <label htmlFor="board-size" style={{ color: '#fff', fontWeight: 'bold' }}>
+            Board size: <span style={{ color: '#3b9774' }}>{effectiveBoardSize} × {effectiveBoardSize}</span>
+          </label>
+          <input
+            id="board-size"
+            type="range"
+            min={3}
+            max={29}
+            step={2} // ensures only odd values starting at 3
+           // value={effectiveBoardSize}
+            onChange={handleBoardSizeChange}
+            disabled={gameStarted}
+            style={{
+              width: '100%',
+              accentColor: '#3b9774',
+              cursor: 'pointer',
+            }}
+          />
+          <small style={{ color: '#bbb' }}>Only odd values between 3 and 49.</small>
+        </div>
       </motion.div>
     </div>
   );
