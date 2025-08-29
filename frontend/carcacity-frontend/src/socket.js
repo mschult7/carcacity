@@ -42,3 +42,20 @@ export function onUsersUpdate(callback) {
 export function leaveServer() {
   socket.emit("leave");
 }
+
+// Lobby management functions
+export function joinLobby(lobbyId) {
+  socket.emit("joinLobby", { lobbyId });
+}
+
+export function getLobbyList() {
+  socket.emit("getLobbyList");
+}
+
+export function onLobbyJoined(callback) {
+  socket.on("lobbyJoined", callback);
+}
+
+export function onLobbyList(callback) {
+  socket.on("lobbyList", callback);
+}

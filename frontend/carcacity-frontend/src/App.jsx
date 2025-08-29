@@ -3,10 +3,15 @@ import { joinServer, socket, setClientId, joinPlayer, setSize } from "./socket";
 import SplashScreen from './SplashScreen.jsx';
 import Lobby from './Lobby.jsx';
 import GameScreen from './GameScreen.jsx';
+import LobbySelection from './LobbySelection.jsx';
 import { playerColors, defaultColors, getColor } from "./colors";
+
 const App = () => {
-  // Current screen the app should display ("splash", "lobby", or "game")
+  // Current screen the app should display ("splash", "lobbySelection", "lobby", or "game")
   const [screen, setScreen] = useState("splash");
+
+  // Current lobby ID
+  const [currentLobby, setCurrentLobby] = useState(null);
 
   // List of all connected players received from the server
   const [players, setPlayers] = useState([]);
@@ -217,7 +222,18 @@ const App = () => {
     }
   };
   const handleEnter = () => {
+    setScreen("lobbySelection");
+  };
+
+  const handleLobbySelected = (lobbyId) => {
+    setCurrentLobby(lobbyId);
+    setScreen("lobby");
     joinPlayer();
+  };
+
+  const handleBackToLobbySelection = () => {
+    setScreen("lobbySelection");
+    setCurrentLobby(null);
   };
   const isSpectator = spectators.some(s => s.clientId === clientId);
   // Determine if lobby animation should play (only from splash screen)
@@ -233,11 +249,14 @@ const App = () => {
       {screen === "splash" && (
         <SplashScreen onContinue={handleEnter} />
       )}
+      {screen === "lobbySelection" && (
+        <LobbySelection onLobbySelected={handleLobbySelected} />
+      )}
       {screen === "lobby" && (
         <Lobby
           players={players}
           onSaveName={handleSaveName}
-          onExit={handleExit}
+          onExit={handleBackToLobbySelection}
           clientId={clientId}
           currentName={currentName}
           animateLobby={animateLobby}
@@ -248,6 +267,7 @@ const App = () => {
           isSpectator={isSpectator}
           boardSize={boardSize}
           onSetBoardSize={onSetBoardSize}
+          currentLobby={currentLobby}
 
         />
       )}
