@@ -42,8 +42,9 @@ function makeDecision(difficulty) {
 /**
  * Robot turn logic - runs continuously to handle AI players
  * @param {Function} clickTile - Function to handle tile clicks
+ * @param {object} io - Socket.IO instance for broadcasting
  */
-async function robotTurn(clickTile) {
+async function robotTurn(clickTile,io) {
   while (true) {
     await sleep(gameState.ROBOT_SPEED);
 
@@ -88,7 +89,7 @@ async function robotTurn(clickTile) {
       const { row, col, rank } = selectedTile;
 
       console.log(`Robot ${currentUser.name} clicks tile [${row}, ${col}]`);
-      clickTile(currentUserId, gameState.usersTurn, false, gameState.sequence, currentUser.color, row, col);
+      clickTile(currentUserId, gameState.usersTurn, false, gameState.sequence, currentUser.color, row, col,io);
     }
   }
 }

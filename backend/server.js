@@ -159,6 +159,6 @@ server.listen(config.PORT, config.HOST, () => {
 });
 
 // Start the robot turn logic
-robotService.robotTurn(gameService.clickTile);
+robotService.robotTurn(gameService.clickTile,io);
 
 module.exports = { app, server, io };
