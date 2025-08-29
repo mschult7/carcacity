@@ -481,53 +481,57 @@ io.on('connection', (socket) => {
 
   // Start the game: move lobby users to game, enable initial tiles, set first turn
   socket.on('start', () => {
-    clearBoard();
-    const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
-    console.log(`User ${users[clientId].name} started the game.`);
-    gameStarted = true;
-    checkMate = false
-    usersTurn = -1;
-    lastUser = -1;
-    for (const [clientId, user] of Object.entries(users)) {
+    const game = getCurrentGame(socket);
+    game.clearBoard();
+    const clientId = Object.keys(game.users).find(id => game.users[id].socketId === socket.id);
+    console.log(`User ${game.users[clientId]?.name} started the game in lobby ${game.lobbyId}.`);
+    game.gameStarted = true;
+    game.checkMate = false
+    game.usersTurn = -1;
+    game.lastUser = -1;
+    for (const [clientId, user] of Object.entries(game.users)) {
       if (user.page === 'lobby') {
         user.page = 'game';
         console.log(`${user.name} moved to the game page.`);
       }
     }
 
-    const middleIndex = (BOARD_SIZE - 1) / 2;
-    enableIfValid(middleIndex + 1, middleIndex);
-    enableIfValid(middleIndex - 1, middleIndex);
-    enableIfValid(middleIndex, middleIndex + 1);
-    enableIfValid(middleIndex, middleIndex - 1);
+    const middleIndex = (game.BOARD_SIZE - 1) / 2;
+    enableIfValid(middleIndex + 1, middleIndex, game);
+    enableIfValid(middleIndex - 1, middleIndex, game);
+    enableIfValid(middleIndex, middleIndex + 1, game);
+    enableIfValid(middleIndex, middleIndex - 1, game);
 
-    toggleTurn();
-    io.emit('checkmate', checkMate);
-    io.emit('gameStarted', gameStarted);
+    toggleTurn(game);
+    io.emit('checkmate', game.checkMate);
+    io.emit('gameStarted', game.gameStarted);
   });
 
   // Report current game status (started/not)
   socket.on('status', () => {
-    io.emit('checkmate', checkMate);
-    io.emit('gameStarted', gameStarted);
+    const game = getCurrentGame(socket);
+    io.emit('checkmate', game.checkMate);
+    io.emit('gameStarted', game.gameStarted);
   });
 
   // Handle tile clicks (human players)
   socket.on('clickTile', ({ row, col, player, index }) => {
     if (!player) return;
-    if (!board[row][col].player) {
-      const userIds = Object.keys(users);
-      if (usersTurn < 0 || usersTurn >= userIds.length) return;
+    const game = getCurrentGame(socket);
+    if (!game.board[row][col].player) {
+      const userIds = Object.keys(game.users);
+      if (game.usersTurn < 0 || game.usersTurn >= userIds.length) return;
 
-      console.log(`Tile Clicked: [${row}, ${col}] ${player}`);
-      var seq = sequence;
-      clickTile(player, index, false, seq, users[player].color, row, col);
+      console.log(`Tile Clicked: [${row}, ${col}] ${player} in lobby ${game.lobbyId}`);
+      var seq = game.sequence;
+      clickTile(player, index, false, seq, game.users[player].color, row, col, game);
     }
   });
 
   // Return full board state to clients
   socket.on('getBoard', () => {
-    io.emit('boardUpdate', board);
+    const game = getCurrentGame(socket);
+    io.emit('boardUpdate', game.board);
   });
   socket.on('getBoardSize', () => {
     io.emit('boardSize', BOARD_SIZE);
@@ -585,25 +589,28 @@ io.on('connection', (socket) => {
  * Board and Tile Utilities
  * ========================= */
 //ClickTile
-function clickTile(player, index, enabled, seq, color, row, col) {
+function clickTile(player, index, enabled, seq, color, row, col, game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
   //console.log(player, index, enabled, seq, color, row, col);
 
-  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0 };
-  users[player].lastTile = [row, col];
+  gameInstance.board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0 };
+  gameInstance.users[player].lastTile = [row, col];
 
-  enableIfValid(row + 1, col);
-  enableIfValid(row - 1, col);
-  enableIfValid(row, col + 1);
-  enableIfValid(row, col - 1);
-  checkCount(row + 1, col + 1);
-  checkCount(row + 1, col - 1);
-  checkCount(row - 1, col + 1);
-  checkCount(row - 1, col - 1);
-  disableIfValid(row, col);
+  enableIfValid(row + 1, col, gameInstance);
+  enableIfValid(row - 1, col, gameInstance);
+  enableIfValid(row, col + 1, gameInstance);
+  enableIfValid(row, col - 1, gameInstance);
+  checkCount(row + 1, col + 1, gameInstance);
+  checkCount(row + 1, col - 1, gameInstance);
+  checkCount(row - 1, col + 1, gameInstance);
+  checkCount(row - 1, col - 1, gameInstance);
+  disableIfValid(row, col, gameInstance);
 
-  sequence = seq + 1;
-  toggleTurn();
-  let scores = largestConnectedGroups();
+  gameInstance.sequence = seq + 1;
+  toggleTurn(gameInstance);
+  let scores = largestConnectedGroups(gameInstance);
   //console.log(JSON.stringify(scores, null, 2));
 
   const highestGroupSizes = {};
@@ -615,14 +622,17 @@ function clickTile(player, index, enabled, seq, color, row, col) {
     }
   });
   Object.keys(highestGroupSizes).forEach(group => {
-    users[group].score = highestGroupSizes[group];
+    gameInstance.users[group].score = highestGroupSizes[group];
   })
-  io.emit('boardUpdate', board);
+  io.emit('boardUpdate', gameInstance.board);
 }
 
-function largestConnectedGroups() {
-  const rows = board.length;
-  const cols = board[0].length;
+function largestConnectedGroups(game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
+  const rows = gameInstance.board.length;
+  const cols = gameInstance.board[0].length;
 
   // Visited set to mark processed tiles
   const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
@@ -637,7 +647,7 @@ function largestConnectedGroups() {
       row >= 0 && row < rows &&
       col >= 0 && col < cols &&
       !visited[row][col] &&
-      board[row][col].player === player
+      gameInstance.board[row][col].player === player
     );
   }
 
@@ -669,7 +679,7 @@ function largestConnectedGroups() {
   const allGroups = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      const currentTile = board[row][col];
+      const currentTile = gameInstance.board[row][col];
       if (!visited[row][col] && currentTile.player && currentTile.player !== 'board') {
         const groupData = dfs(row, col, currentTile.player);
         groupData.player = currentTile.player; // Add player to the group data
@@ -681,13 +691,16 @@ function largestConnectedGroups() {
   // Return an array containing all groups with their details
   return allGroups;
 }
-function countTiles(row, col, player) {
+function countTiles(row, col, player, game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
   let tiles = [];
   let count = 0;
   for (let r = row - 1; r <= row + 1; r++) { // Change '<' to '<='
     for (let c = col - 1; c <= col + 1; c++) { // Change '<' to '<='
-      if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) { // Valid indexes
-        if (board[r][c].player === player) {
+      if (r >= 0 && r < gameInstance.BOARD_SIZE && c >= 0 && c < gameInstance.BOARD_SIZE) { // Valid indexes
+        if (gameInstance.board[r][c].player === player) {
           //console.log(row, col, player, r, c);
           tiles.push({ row: r, col: c });
           count++;
@@ -699,49 +712,61 @@ function countTiles(row, col, player) {
 }
 
 // Safely enable a tile and update enabledTiles array
-function enableIfValid(r, c) {
-  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-    if (board[r][c].sequence === null) {
-      if (!board[r][c].enabled) {
-        board[r][c].enabled = true;
-        enabledTiles.push({ row: r, col: c, rank: null });
+function enableIfValid(r, c, game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
+  if (r >= 0 && r < gameInstance.BOARD_SIZE && c >= 0 && c < gameInstance.BOARD_SIZE) {
+    if (gameInstance.board[r][c].sequence === null) {
+      if (!gameInstance.board[r][c].enabled) {
+        gameInstance.board[r][c].enabled = true;
+        gameInstance.enabledTiles.push({ row: r, col: c, rank: null });
         //console.log(`adding to enabled tile row:${r} col: ${c}`);
       }
     }
-    checkCount(r, c);
+    checkCount(r, c, gameInstance);
   }
 }
 
 // Safely disable a tile and update enabledTiles array
-function disableIfValid(r, c) {
-  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+function disableIfValid(r, c, game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
+  if (r >= 0 && r < gameInstance.BOARD_SIZE && c >= 0 && c < gameInstance.BOARD_SIZE) {
     // Find the index of the tile in the enabledTiles array
-    const index = enabledTiles.findIndex(tile => tile.row === r && tile.col === c);
+    const index = gameInstance.enabledTiles.findIndex(tile => tile.row === r && tile.col === c);
     if (index !== -1) {
       // Remove the tile from the array using splice
       //console.log(`splicing from enabled tile (${index}) row:${r} col: ${c}`);
-      enabledTiles.splice(index, 1);
-      checkCount(r, c);
-      if (board[r][c].enabled) {
-        board[r][c].enabled = false;
+      gameInstance.enabledTiles.splice(index, 1);
+      checkCount(r, c, gameInstance);
+      if (gameInstance.board[r][c].enabled) {
+        gameInstance.board[r][c].enabled = false;
       }
     }
   }
 }
-function checkRank(r, c, player) {
-  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-    if (board[r][c].sequence === null || board[r][c].sequence < 0) {
-      const rank = countTiles(r, c, player);
-      const enabledTileindex = enabledTiles.findIndex(tile => tile.row === r && tile.col === c);
-      enabledTiles[enabledTileindex].rank = rank;
-      board[r][c].rank = rank;
+function checkRank(r, c, player, game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
+  if (r >= 0 && r < gameInstance.BOARD_SIZE && c >= 0 && c < gameInstance.BOARD_SIZE) {
+    if (gameInstance.board[r][c].sequence === null || gameInstance.board[r][c].sequence < 0) {
+      const rank = countTiles(r, c, player, gameInstance);
+      const enabledTileindex = gameInstance.enabledTiles.findIndex(tile => tile.row === r && tile.col === c);
+      gameInstance.enabledTiles[enabledTileindex].rank = rank;
+      gameInstance.board[r][c].rank = rank;
     }
   }
 }
-function checkCount(r, c) {
-  if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-    if (board[r][c].sequence >= 0 && !(board[r][c].sequence === null)) {
-      board[r][c].count = countTiles(r, c, board[r][c].player);
+function checkCount(r, c, game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
+  if (r >= 0 && r < gameInstance.BOARD_SIZE && c >= 0 && c < gameInstance.BOARD_SIZE) {
+    if (gameInstance.board[r][c].sequence >= 0 && !(gameInstance.board[r][c].sequence === null)) {
+      gameInstance.board[r][c].count = countTiles(r, c, gameInstance.board[r][c].player, gameInstance);
     }
   }
 }
@@ -837,56 +862,59 @@ function makeDecision(difficulty) {
   }
 }
 // Advance to the next user's turn and broadcast
-function toggleTurn() {
-  const userIds = Object.keys(users);
-  lastUser = usersTurn;
-  if (enabledTiles.length === 0 && gameStarted) {
-    if (lastUser >= 0) {
-      const lastUserId = userIds[lastUser];
-      users[lastUserId].isTurn = false;
+function toggleTurn(game = null) {
+  // Use default game (lobby 1) if none provided for backward compatibility
+  const gameInstance = game || getGame(1);
+  
+  const userIds = Object.keys(gameInstance.users);
+  gameInstance.lastUser = gameInstance.usersTurn;
+  if (gameInstance.enabledTiles.length === 0 && gameInstance.gameStarted) {
+    if (gameInstance.lastUser >= 0) {
+      const lastUserId = userIds[gameInstance.lastUser];
+      gameInstance.users[lastUserId].isTurn = false;
     }
-    checkMate = true;
-    gameStarted = false;
-    Object.keys(users).forEach(clientId => {
-      const user = users[clientId];
+    gameInstance.checkMate = true;
+    gameInstance.gameStarted = false;
+    Object.keys(gameInstance.users).forEach(clientId => {
+      const user = gameInstance.users[clientId];
       if (user.robot && !user.connected) {
         user.robot = false;
       }
     });
 
 
-    io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
-    io.emit('checkmate', checkMate);
-    io.emit('gameStarted', gameStarted);
+    io.emit('users', Object.entries(gameInstance.users).map(([id, u]) => ({ clientId: id, ...u })));
+    io.emit('checkmate', gameInstance.checkMate);
+    io.emit('gameStarted', gameInstance.gameStarted);
 
     return;
   }
-  if (usersTurn < 0) {
-    usersTurn = 0;
-  } else if (usersTurn < userIds.length - 1) {
-    usersTurn += 1;
+  if (gameInstance.usersTurn < 0) {
+    gameInstance.usersTurn = 0;
+  } else if (gameInstance.usersTurn < userIds.length - 1) {
+    gameInstance.usersTurn += 1;
   } else {
-    usersTurn = 0;
+    gameInstance.usersTurn = 0;
   }
-  //console.log(JSON.stringify(enabledTiles, null, 2));
-  //console.log(`lastUser: ${lastUser} | usersTurn: ${usersTurn} | userId: ${userIds[usersTurn]}`);
-  const turnUserId = userIds[usersTurn];
-  enabledTiles.forEach(tile => {
-    checkRank(tile.row, tile.col, turnUserId);
+  //console.log(JSON.stringify(gameInstance.enabledTiles, null, 2));
+  //console.log(`lastUser: ${gameInstance.lastUser} | usersTurn: ${gameInstance.usersTurn} | userId: ${userIds[gameInstance.usersTurn]}`);
+  const turnUserId = userIds[gameInstance.usersTurn];
+  gameInstance.enabledTiles.forEach(tile => {
+    checkRank(tile.row, tile.col, turnUserId, gameInstance);
   });
-  if (userIds.length >= usersTurn + 1 && usersTurn !== lastUser) {
+  if (userIds.length >= gameInstance.usersTurn + 1 && gameInstance.usersTurn !== gameInstance.lastUser) {
 
-    users[turnUserId].isTurn = true;
-    if (lastUser >= 0) {
-      const lastUserId = userIds[lastUser];
-      users[lastUserId].isTurn = false;
+    gameInstance.users[turnUserId].isTurn = true;
+    if (gameInstance.lastUser >= 0) {
+      const lastUserId = userIds[gameInstance.lastUser];
+      gameInstance.users[lastUserId].isTurn = false;
     }
 
     io.emit('turn', {
-      userName: users[turnUserId]?.name, // Pass only the user's name
-      usersTurn: usersTurn // Include the usersTurn variable
+      userName: gameInstance.users[turnUserId]?.name, // Pass only the user's name
+      usersTurn: gameInstance.usersTurn // Include the usersTurn variable
     });
-    io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    io.emit('users', Object.entries(gameInstance.users).map(([id, u]) => ({ clientId: id, ...u })));
   }
 }
 
