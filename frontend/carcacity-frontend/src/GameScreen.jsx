@@ -42,7 +42,9 @@ const GameScreen = ({
   handleStartGame,
   gameStarted,
   isSpectator,
-  checkMate
+  checkMate,
+  currentTurnTile,
+  currentTurnPlayerName
 }) => {
   const boardRef = useRef();
   const [uiMinimized, setUiMinimized] = useState(false);
@@ -59,6 +61,10 @@ const GameScreen = ({
   // --- Long press detection state ---
   const longPressTimerRef = useRef(null);
   const [isPressing, setIsPressing] = useState(false);
+
+  // Check if it's the current player's turn
+  const isMyTurn = currentTurnPlayerName === playerName;
+  const IMAGE_URL = "https://panther01.ddns.net/app/tiles/default/";
 
   const openTileCount = () => {
     return tileOpened.filter(Boolean).length;
@@ -325,6 +331,54 @@ const GameScreen = ({
             </div>
           ))}
         </div>
+
+        {/* Current Turn Tile */}
+        {isMyTurn && currentTurnTile && gameStarted && !isSpectator && (
+          <div
+            style={{
+              pointerEvents: 'auto',
+              background: 'rgba(0,0,0,0.8)',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+              position: isLandscape ? 'static' : 'absolute',
+              top: isLandscape ? 'auto' : '50%',
+              left: isLandscape ? 'auto' : '0.5rem',
+              transform: isLandscape ? 'none' : 'translateY(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.5rem',
+              border: '2px solid #3b9774',
+            }}
+          >
+            <div style={{ 
+              color: '#3b9774', 
+              fontWeight: 'bold', 
+              fontSize: '0.9rem',
+              textAlign: 'center'
+            }}>
+              Your Turn
+            </div>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              backgroundImage: `url(${IMAGE_URL}${currentTurnTile.image})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              borderRadius: '4px',
+              border: '1px solid #3b9774',
+            }} />
+            <div style={{ 
+              color: '#fff', 
+              fontSize: '0.8rem',
+              textAlign: 'center'
+            }}>
+              Place Tile
+            </div>
+          </div>
+        )}
 
         {/* Menu */}
         <div

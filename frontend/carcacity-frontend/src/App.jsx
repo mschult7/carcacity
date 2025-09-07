@@ -25,6 +25,10 @@ const App = () => {
   // gameStarted
   const [gameStarted, setgameStarted] = useState(false);
   const [checkMate, setCheckMate] = useState(false);
+  
+  // Current turn tile and turn information
+  const [currentTurnTile, setCurrentTurnTile] = useState(null);
+  const [currentTurnPlayerName, setCurrentTurnPlayerName] = useState("");
 
   /**
    * Handle session restoration and live updates of connected users.
@@ -91,12 +95,18 @@ const App = () => {
       setCheckMate(status);
     };
 
+    const handleTurn = (turnData) => {
+      setCurrentTurnTile(turnData.tile);
+      setCurrentTurnPlayerName(turnData.userName || turnData.name || "");
+    };
+
     // Subscribe to the "users" event
     socket.on("users", handleUsers);
     socket.on("spectators", handleSpectators);
     socket.on("gameStarted", handlegameStarted);
     socket.on("checkmate", handlecheckMate);
     socket.on("boardSize", handleBoardSize);
+    socket.on("turn", handleTurn);
 
     // On reconnect, re-join automatically and request the user list
     socket.on("connect", () => {
@@ -263,6 +273,8 @@ const App = () => {
           gameStarted={gameStarted}
           isSpectator={isSpectator}
           checkMate={checkMate}
+          currentTurnTile={currentTurnTile}
+          currentTurnPlayerName={currentTurnPlayerName}
         />
       )}
     </>
