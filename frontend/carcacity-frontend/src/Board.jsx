@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { socket } from './socket';
 import { playerColors, defaultColors } from "./colors";
 import { MotionConfig, motion } from 'framer-motion';
-const Board = forwardRef(({ clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate }, ref) => {
+const Board = forwardRef(({ clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate, onTilePlaced }, ref) => {
 
   const [size, setSize] = useState(21);
 
@@ -281,6 +281,7 @@ Usage:
 
       socket.emit('placeTile', { row, col, player: clientID, index: playerIndex });
       socket.emit('list');
+      onTilePlaced?.(); // Notify GameScreen that a tile has been placed
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));
         newTiles[row][col] = { player: clientID, index: playerIndex, enabled: false };
