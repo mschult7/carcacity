@@ -290,7 +290,7 @@ Usage:
   };
 
   // Tile styles
-  const IMAGE_URL = "https://panther01.ddns.net/app/icons/land_6.png";
+  const IMAGE_URL = "https://panther01.ddns.net/app/tiles/default/";
   const getTileStyle = (tile) => {
     const baseStyle = {
       width: '50px',
@@ -315,7 +315,7 @@ Usage:
       if (checkMate) {
         return {
           ...baseStyle,
-          backgroundColor: `${tile.color}`, // Blue overlay
+          backgroundImage: `url(${IMAGE_URL}${!tile.image ? 'tile.png' : tile.image})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "repeat",
@@ -327,10 +327,10 @@ Usage:
       }
       return {
         ...baseStyle,
-        backgroundImage: `url(${IMAGE_URL})`,
+        backgroundImage: `url(${IMAGE_URL}${!tile.image ? 'tile.png' : tile.image})`,
         backgroundColor: '', // Blue overlay
         boxShadow: isLastPlayedTile
-          ? `inset 0 0 0 2px transparent, inset 0 0 0 7px ${tile.color}`
+          ? `inset 0 0 0 2px transparent, inset 0 0 0 7px ${!tile.color ? 'transparent' : hexToRgba(tile.color, 0.75)}`
           : '',
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -366,7 +366,19 @@ Usage:
       borderRadius: '0',
     };
   };
-
+  function hexToRgba(hex, alpha) {
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) {
+      r = parseInt(hex[1] + hex[2], 16);
+      g = parseInt(hex[3] + hex[4], 16);
+      b = parseInt(hex[5] + hex[6], 16);
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
   // Prevent browser pinch zoom
   useEffect(() => {
     const preventPinch = (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); };

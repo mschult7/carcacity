@@ -29,7 +29,21 @@ function getWinners(players) {
   const maxScore = Math.max(...players.map((p) => p.score));
   return players.filter((p) => p.score === maxScore);
 }
-const GameScreen = ({ clientID, playerName, players, onLobby, onSpecJoin, onEndGame, handleStartGame, gameStarted, isSpectator, checkMate }) => {
+
+const LONG_PRESS_THRESHOLD = 600; // ms
+
+const GameScreen = ({
+  clientID,
+  playerName,
+  players,
+  onLobby,
+  onSpecJoin,
+  onEndGame,
+  handleStartGame,
+  gameStarted,
+  isSpectator,
+  checkMate
+}) => {
   const boardRef = useRef();
   const [uiMinimized, setUiMinimized] = useState(false);
   const isLandscape = useLandscape();
@@ -41,6 +55,10 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onSpecJoin, onEndG
   const [showGameOver, setShowGameOver] = useState(false);
   const [gameOverDisplayed, setGameOverDisplayed] = useState(false); // For menu UI
   const [winners, setWinners] = useState([]);
+
+  // --- Long press detection state ---
+  const longPressTimerRef = useRef(null);
+  const [isPressing, setIsPressing] = useState(false);
 
   const openTileCount = () => {
     return tileOpened.filter(Boolean).length;
@@ -107,6 +125,30 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onSpecJoin, onEndG
     }
   };
 
+  // --- Long press handlers for overlay ---
+  const handleGameOverPointerDown = () => {
+    setIsPressing(true);
+    longPressTimerRef.current = setTimeout(() => {
+      setShowGameOver(false);
+    }, LONG_PRESS_THRESHOLD);
+  };
+
+  const handleGameOverPointerUp = () => {
+    setIsPressing(false);
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleGameOverPointerLeave = () => {
+    setIsPressing(false);
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   // Winner and score for the splash
   const winnerText = winners.length === 1
     ? `Winner: ${winners[0]?.name} (${winners[0]?.score})`
@@ -147,9 +189,15 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onSpecJoin, onEndG
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 99,
-              pointerEvents: 'none',
+              pointerEvents: 'auto', // Allow pointer events!
               background: 'rgba(0,0,0,0.25)',
+              userSelect: 'none',
             }}
+            // Long press listeners (pointer events for both touch and mouse)
+            onPointerDown={handleGameOverPointerDown}
+            onPointerUp={handleGameOverPointerUp}
+            onPointerLeave={handleGameOverPointerLeave}
+            onPointerCancel={handleGameOverPointerLeave}
           >
             <motion.div
               initial={{ y: -30 }}
@@ -165,6 +213,7 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onSpecJoin, onEndG
                 padding: '1.5rem 2rem 1rem 2rem',
                 borderRadius: '18px',
                 background: 'rgba(0,0,0,0.6)',
+                textAlign: 'center',
               }}
             >
               Game Over
@@ -180,6 +229,13 @@ const GameScreen = ({ clientID, playerName, players, onLobby, onSpecJoin, onEndG
                 }}
               >
                 {winnerText}
+                <div style={{
+                  fontSize: '0.9rem',
+                  opacity: 0.5,
+                  marginTop: '1rem'
+                }}>
+                  (Long press anywhere to dismiss)
+                </div>
               </div>
             </motion.div>
           </motion.div>

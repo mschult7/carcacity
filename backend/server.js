@@ -60,6 +60,7 @@ io.use((socket, next) => {
 // Map clientId -> { name, socketId, page, connected }
 const users = {};
 const spectators = {};
+let turnTile = {};
 const BOARD_SIZE_INIT = 9;
 let BOARD_SIZE = BOARD_SIZE_INIT;
 const initialROBOT_SPEED = 1500;
@@ -76,6 +77,9 @@ let board = Array(BOARD_SIZE)
   .map(() =>
     Array(BOARD_SIZE).fill({ player: null, index: null, enabled: false, sequence: null })
   );
+
+//Tracks deck of tiles
+let tileDeck = [];
 
 // Tracks which tiles can be clicked next
 let enabledTiles = []; // Array to track enabled tiles
@@ -394,10 +398,10 @@ io.on('connection', (socket) => {
     }
 
     const middleIndex = (BOARD_SIZE - 1) / 2;
-    enableIfValid(middleIndex + 1, middleIndex);
-    enableIfValid(middleIndex - 1, middleIndex);
-    enableIfValid(middleIndex, middleIndex + 1);
-    enableIfValid(middleIndex, middleIndex - 1);
+    //enableIfValid(middleIndex + 1, middleIndex);
+    //enableIfValid(middleIndex - 1, middleIndex);
+    //enableIfValid(middleIndex, middleIndex + 1);
+    //enableIfValid(middleIndex, middleIndex - 1);
 
     toggleTurn();
     io.emit('checkmate', checkMate);
@@ -444,14 +448,18 @@ io.on('connection', (socket) => {
       io.emit('turn', {
 
         name: 'NA', // Pass only the user's name
-        usersTurn: usersTurn // Include the usersTurn variable
+        usersTurn: usersTurn, // Include the usersTurn variable
+        tile: turnTile,
+        tileCount: tileDeck.length
       });
     }
     const currentUserId = userIds[usersTurn];
     io.emit('turn', {
 
       name: users[currentUserId]?.name, // Pass only the user's name
-      usersTurn: usersTurn // Include the usersTurn variable
+      usersTurn: usersTurn, // Include the usersTurn variable
+      tile: turnTile,
+      tileCount: tileDeck.length
     });
   });
 
@@ -486,7 +494,7 @@ io.on('connection', (socket) => {
 function clickTile(player, index, enabled, seq, color, row, col) {
   //console.log(player, index, enabled, seq, color, row, col);
 
-  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0 };
+  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0, image: turnTile.image };
   users[player].lastTile = [row, col];
 
   enableIfValid(row + 1, col);
@@ -650,14 +658,41 @@ function clearBoard() {
     .map(() =>
       Array(BOARD_SIZE)
         .fill(null)
-        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null }))
+        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null, tileId: null, image: null }))
     );
 
-  enabledTiles = [];
+  tileDeck = [];
 
+  pushMany(tileDeck,{ tileID: 1, image: "1.png"},4);
+  pushMany(tileDeck,{ tileID: 2, image: "2.png"},2);
+  pushMany(tileDeck,{ tileID: 3, image: "3.png"},1);
+  pushMany(tileDeck,{ tileID: 4, image: "4.png"},3);
+  pushMany(tileDeck,{ tileID: 5, image: "5.png"},1);
+  pushMany(tileDeck,{ tileID: 6, image: "6.png"},1);
+  pushMany(tileDeck,{ tileID: 7, image: "7.png"},2);
+  pushMany(tileDeck,{ tileID: 8, image: "8.png"},3);
+  pushMany(tileDeck,{ tileID: 9, image: "9.png"},2);
+  pushMany(tileDeck,{ tileID: 10, image: "10.png"},3);
+  pushMany(tileDeck,{ tileID: 11, image: "11.png"},2);
+  pushMany(tileDeck,{ tileID: 12, image: "12.png"},1);
+  pushMany(tileDeck,{ tileID: 13, image: "13.png"},2);
+  pushMany(tileDeck,{ tileID: 14, image: "14.png"},2);
+  pushMany(tileDeck,{ tileID: 15, image: "15.png"},3);
+  pushMany(tileDeck,{ tileID: 16, image: "16.png"},5);
+  pushMany(tileDeck,{ tileID: 17, image: "17.png"},3);
+  pushMany(tileDeck,{ tileID: 18, image: "18.png"},3);
+  pushMany(tileDeck,{ tileID: 19, image: "19.png"},3);
+  pushMany(tileDeck,{ tileID: 20, image: "20.png"},4);
+  pushMany(tileDeck,{ tileID: 21, image: "21.png"},8);
+  pushMany(tileDeck,{ tileID: 22, image: "22.png"},9);
+  pushMany(tileDeck,{ tileID: 23, image: "23.png"},4);
+  pushMany(tileDeck,{ tileID: 24, image: "24.png"},1);
+  shuffle(tileDeck);
   let middleIndex = (BOARD_SIZE - 1) / 2;
-  //console.log(middleIndex);
-  board[middleIndex][middleIndex] = { player: 'board', index: -1 };
+  //console.log(middleIndex);WW
+  enabledTiles = [];
+  enabledTiles.push({ row: middleIndex, col: middleIndex, rank: null });
+  board[middleIndex][middleIndex].enabled = true;
   sequence = 0;
   usersTurn = -1;
   gameStarted = false;
@@ -667,7 +702,17 @@ function clearBoard() {
   io.emit('gameStarted', gameStarted);
   console.log('Board cleared');
 }
-
+function pushMany(array, item, times) {
+  for (let i = 0; i < times; i++) {
+    array.push(item);
+  }
+}
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+  }
+}
 /* =========================
  * Turn and Robot Utilities
  * ========================= */
@@ -755,12 +800,18 @@ function makeDecision(difficulty) {
 function toggleTurn() {
   const userIds = Object.keys(users);
   lastUser = usersTurn;
-  if (enabledTiles.length === 0 && gameStarted) {
+  if ((enabledTiles.length === 0 || tileDeck.length === 0) && gameStarted) {
     if (lastUser >= 0) {
       const lastUserId = userIds[lastUser];
       users[lastUserId].isTurn = false;
     }
     checkMate = true;
+    enabledTiles = [];
+    board.forEach(row => {
+      row.forEach(tile => {
+        tile.enabled = false;
+      });
+    });
     gameStarted = false;
     Object.keys(users).forEach(clientId => {
       const user = users[clientId];
@@ -789,17 +840,18 @@ function toggleTurn() {
   enabledTiles.forEach(tile => {
     checkRank(tile.row, tile.col, turnUserId);
   });
-  if (userIds.length >= usersTurn + 1 && usersTurn !== lastUser) {
-
-    users[turnUserId].isTurn = true;
+  if (userIds.length >= usersTurn + 1) {
     if (lastUser >= 0) {
       const lastUserId = userIds[lastUser];
       users[lastUserId].isTurn = false;
     }
-
+    users[turnUserId].isTurn = true;
+    turnTile = tileDeck.pop();
     io.emit('turn', {
       userName: users[turnUserId]?.name, // Pass only the user's name
-      usersTurn: usersTurn // Include the usersTurn variable
+      usersTurn: usersTurn, // Include the usersTurn variable
+      tile: turnTile,
+      tileCount: tileDeck.length
     });
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
   }
