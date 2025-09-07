@@ -279,7 +279,7 @@ Usage:
     if (!isTurn) return;
     if (!tiles[row][col].player) {
 
-      socket.emit('clickTile', { row, col, player: clientID, index: playerIndex });
+      socket.emit('placeTile', { row, col, player: clientID, index: playerIndex });
       socket.emit('list');
       setTiles((prevTiles) => {
         const newTiles = prevTiles.map((tileRow) => tileRow.map((tile) => ({ ...tile })));

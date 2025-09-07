@@ -332,53 +332,53 @@ const GameScreen = ({
           ))}
         </div>
 
-        {/* Current Turn Tile */}
-        {isMyTurn && currentTurnTile && gameStarted && !isSpectator && (
-          <div
-            style={{
-              pointerEvents: 'auto',
-              background: 'rgba(0,0,0,0.8)',
-              borderRadius: '8px',
-              padding: '0.75rem',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-              position: isLandscape ? 'static' : 'absolute',
-              top: isLandscape ? 'auto' : '50%',
-              left: isLandscape ? 'auto' : '0.5rem',
-              transform: isLandscape ? 'none' : 'translateY(-50%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '0.5rem',
-              border: '2px solid #3b9774',
-            }}
-          >
-            <div style={{ 
-              color: '#3b9774', 
-              fontWeight: 'bold', 
-              fontSize: '0.9rem',
-              textAlign: 'center'
-            }}>
-              Your Turn
-            </div>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              backgroundImage: `url(${IMAGE_URL}${currentTurnTile.image})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              borderRadius: '4px',
-              border: '1px solid #3b9774',
-            }} />
-            <div style={{ 
-              color: '#fff', 
-              fontSize: '0.8rem',
-              textAlign: 'center'
-            }}>
-              Place Tile
-            </div>
-          </div>
-        )}
+      {/* Current Turn Tile */}
+{isMyTurn && currentTurnTile && gameStarted && !isSpectator && (
+  <div
+    style={{
+      pointerEvents: 'auto',
+      background: 'rgba(0,0,0,0.8)',
+      borderRadius: '8px',
+      padding: '0.75rem',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+      position: 'fixed', // <-- changed from static/absolute
+      bottom: '1.5rem',  // <-- anchor to bottom
+      right: '1.5rem',   // <-- anchor to right
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '0.5rem',
+      border: '2px solid #3b9774',
+      zIndex: 20, // keep above board
+    }}
+  >
+    <div style={{ 
+      color: '#3b9774', 
+      fontWeight: 'bold', 
+      fontSize: '0.9rem',
+      textAlign: 'center'
+    }}>
+      Your Turn
+    </div>
+    <div style={{
+      width: '60px',
+      height: '60px',
+      backgroundImage: `url(${IMAGE_URL}${currentTurnTile.image})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      borderRadius: '4px',
+      border: '1px solid #3b9774',
+    }} />
+    <div style={{ 
+      color: '#fff', 
+      fontSize: '0.8rem',
+      textAlign: 'center'
+    }}>
+      Place Tile
+    </div>
+  </div>
+)}
 
         {/* Menu */}
         <div

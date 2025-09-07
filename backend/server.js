@@ -27,10 +27,11 @@ const io = new Server(server, {
  * ========================= */
 
 const tile_data = {}; // tile_data[tileId][x][y] = land_type_id
+const tiles = {}; // tiles[tileId] = { image: ..., default_count: ... }
 const land_type = {}; // land_type.name -> id
 const land_type_names = {}; // land_type.id -> name
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
   host: 'mysql',
   user: 'carcacity_svc',       // change as needed
   password: 'carcacity_password',       // change as needed
@@ -49,7 +50,17 @@ function loadTileDataAndLandTypes() {
       land_type_names[row.id] = row.name;
     });
     console.log('Loaded land_type enum:', land_type);
-
+    db.query('SELECT id, name, image_url, default_count FROM tiles', (err, results) => {
+      if (err) {
+        console.error('Error loading tiles:', err);
+        process.exit(1);
+      }
+      for (const tile of results) {
+        const { id, image_url, default_count } = tile;
+        tiles[id] = { image: image_url, default_count };
+      }
+      console.log(`Loaded ${results.length} tiles into 2D lookup`);
+    });
     // Load tile_data (main map data)
     db.query('SELECT tile_id, x, y, land_type_id FROM tile_data', (err, results) => {
       if (err) {
@@ -63,7 +74,6 @@ function loadTileDataAndLandTypes() {
         tile_data[tile_id][x][y] = land_type_id;
       }
       console.log(`Loaded ${results.length} tile_data cells into 3D lookup`);
-      db.end();
     });
   });
 }
@@ -118,7 +128,7 @@ let checkMate = false;
 let sequence = 0;
 let usersTurn = -1;
 let lastUser = -1;
-
+let placedTile = [];
 // Initial board scaffold (will be reset by clearBoard() below)
 let board = Array(BOARD_SIZE)
   .fill(null)
@@ -128,7 +138,6 @@ let board = Array(BOARD_SIZE)
 
 //Tracks deck of tiles
 let tileDeck = [];
-
 // Tracks which tiles can be clicked next
 let enabledTiles = []; // Array to track enabled tiles
 
@@ -148,6 +157,7 @@ clearBoard();
  * ========================= */
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
+
   /* =========================
    * USER ACTIONS (join/leave, robots, presence, pages)
    * ========================= */
@@ -211,7 +221,7 @@ io.on('connection', (socket) => {
       if (spectators[clientId]) {
         if (spectators[clientId].socketId !== socket.id) {
           addSpectator(clientId, socket.id);
-        }else{
+        } else {
           spectators[clientId].lastSeen = Date.now();
         }
       }
@@ -312,10 +322,10 @@ io.on('connection', (socket) => {
   // Broadcast current users list
   socket.on('list', () => {
     const clientId = Object.keys(users).find(id => users[id].socketId === socket.id);
-    if(users[clientId]){
+    if (users[clientId]) {
       users[clientId].lastSeen = Date.now();
     }
-    if(spectators[clientId]){
+    if (spectators[clientId]) {
       spectators[clientId].lastSeen = Date.now();
     }
     io.emit('users', Object.values(users));
@@ -474,6 +484,18 @@ io.on('connection', (socket) => {
       clickTile(player, index, false, seq, users[player].color, row, col);
     }
   });
+  // Handle tile placement (human players)
+  socket.on('placeTile', ({ row, col, player, index }) => {
+    if (!player) return;
+    if (!board[row][col].player) {
+      const userIds = Object.keys(users);
+      if (usersTurn < 0 || usersTurn >= userIds.length) return;
+
+      console.log(`Tile placed: [${row}, ${col}] ${player}`);
+      var seq = sequence;
+      placeTile(player, index, false, seq, users[player].color, row, col);
+    }
+  });
 
   // Return full board state to clients
   socket.on('getBoard', () => {
@@ -530,6 +552,31 @@ io.on('connection', (socket) => {
     io.emit('gameStarted', gameStarted);
     console.log('Game Ended.');
   });
+  // --- TILE DATA SOCKET API --- //
+
+  // Tile list for dropdown
+  socket.on('tileList', () => {
+    //console.log('Fetching tile list...');
+    db.query('SELECT id, name FROM tiles ORDER BY id', (err, results) => {
+      if (err) {
+        console.error('Error loading tiles:', err);
+        process.exit(1);
+      }
+      //console.log(`Loaded ${results.length} tiles from database.`);
+      socket.emit('tileListResult', results);
+    });
+  });
+
+  // Tile data for grid/form
+  socket.on('tileData', ({ tileId }) => {
+    db.query('SELECT * FROM tiles WHERE id=?', [tileId], (err, tileRows) => {
+      if (err || !tileRows.length) return socket.emit('tileDataResult', {});
+      db.query('SELECT x, y, land_type_id FROM tile_data WHERE tile_id=?', [tileId], (err2, tileDataRows) => {
+        if (err2) return socket.emit('tileDataResult', {});
+        socket.emit('tileDataResult', { tile: tileRows[0], tile_data: tileDataRows });
+      });
+    });
+  });
 
   // Send initial board state on connect
   socket.emit('boardUpdate', board);
@@ -538,11 +585,23 @@ io.on('connection', (socket) => {
 /* =========================
  * Board and Tile Utilities
  * ========================= */
+//PlaceTile
+function placeTile(player, index, enabled, seq, color, row, col) {
+  let [x, y] = placedTile;
+  if (placedTile.length === 2 && board[x][y].player === player && board[x][y].sequence === seq) {
+    //remove placed tile to default state
+    var tile = board[x][y];
+    board[x][y] = { player: null, index: null, enabled: tile.enabled, sequence: null, color: null, row: x, col: y, count: 0, tileID: null, image: null };
+  }
+  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0, tileID: turnTile.tileID, image: turnTile.image };
+  placedTile = [row, col];
+  io.emit('boardUpdate', board);
+}
 //ClickTile
 function clickTile(player, index, enabled, seq, color, row, col) {
   //console.log(player, index, enabled, seq, color, row, col);
 
-  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0,tileID: turnTile.tileID, image: turnTile.image };
+  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0, tileID: turnTile.tileID, image: turnTile.image };
   users[player].lastTile = [row, col];
 
   enableIfValid(row + 1, col);
@@ -807,36 +866,18 @@ function clearBoard() {
     .map(() =>
       Array(BOARD_SIZE)
         .fill(null)
-        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null, tileID: null, image: null }))
+        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null, tileID: null, image: null, fitments: [false, false, false, false], rotation: 0 }))
     );
 
   tileDeck = [];
 
-  pushMany(tileDeck,{ tileID: 1, image: "1.png"},4);
-  pushMany(tileDeck,{ tileID: 2, image: "2.png"},2);
-  pushMany(tileDeck,{ tileID: 3, image: "3.png"},1);
-  pushMany(tileDeck,{ tileID: 4, image: "4.png"},3);
-  pushMany(tileDeck,{ tileID: 5, image: "5.png"},1);
-  pushMany(tileDeck,{ tileID: 6, image: "6.png"},1);
-  pushMany(tileDeck,{ tileID: 7, image: "7.png"},2);
-  pushMany(tileDeck,{ tileID: 8, image: "8.png"},3);
-  pushMany(tileDeck,{ tileID: 9, image: "9.png"},2);
-  pushMany(tileDeck,{ tileID: 10, image: "10.png"},3);
-  pushMany(tileDeck,{ tileID: 11, image: "11.png"},2);
-  pushMany(tileDeck,{ tileID: 12, image: "12.png"},1);
-  pushMany(tileDeck,{ tileID: 13, image: "13.png"},2);
-  pushMany(tileDeck,{ tileID: 14, image: "14.png"},2);
-  pushMany(tileDeck,{ tileID: 15, image: "15.png"},3);
-  pushMany(tileDeck,{ tileID: 16, image: "16.png"},5);
-  pushMany(tileDeck,{ tileID: 17, image: "17.png"},3);
-  pushMany(tileDeck,{ tileID: 18, image: "18.png"},3);
-  pushMany(tileDeck,{ tileID: 19, image: "19.png"},3);
-  pushMany(tileDeck,{ tileID: 20, image: "20.png"},4);
-  pushMany(tileDeck,{ tileID: 21, image: "21.png"},8);
-  pushMany(tileDeck,{ tileID: 22, image: "22.png"},9);
-  pushMany(tileDeck,{ tileID: 23, image: "23.png"},4);
-  pushMany(tileDeck,{ tileID: 24, image: "24.png"},1);
+  //for each key in tiles
+  Object.keys(tiles).forEach(tileID => {
+    pushMany(tileDeck, { tileID: tileID, image: tiles[tileID].image }, tiles[tileID].default_count);
+  });
+
   shuffle(tileDeck);
+  console.log(`Tile deck initialized with ${tileDeck.length} tiles.`);
   let middleIndex = (BOARD_SIZE - 1) / 2;
   //console.log(middleIndex);WW
   enabledTiles = [];
@@ -852,6 +893,7 @@ function clearBoard() {
   console.log('Board cleared');
 }
 function pushMany(array, item, times) {
+  //console.log(item);
   for (let i = 0; i < times; i++) {
     array.push(item);
   }
@@ -988,23 +1030,24 @@ function toggleTurn() {
   const turnUserId = userIds[usersTurn];
   turnTile = tileDeck.pop();
 
-  if(sequence > 0){
-      enabledTiles.forEach(tile => {
-        
-        checkRank(tile.row, tile.col, turnUserId);
-        const fitments = checkFitment(tile.row, tile.col, turnTile);
-        const isAnyFit = fitments.some(fits => fits);
+  if (sequence > 0) {
+    enabledTiles.forEach(tile => {
 
-        if (isAnyFit) {
+      checkRank(tile.row, tile.col, turnUserId);
+      const fitments = checkFitment(tile.row, tile.col, turnTile);
+      const isAnyFit = fitments.some(fits => fits);
+
+      if (isAnyFit) {
         // Gather all degrees that fit
         const fitDegrees = fitments
           .map((fits, idx) => fits ? idx * 90 : null)
           .filter(deg => deg !== null);
-        console.log(`Checking tile (${board[tile.row][tile.col].tileID}) [${tile.row}, ${tile.col}] for tile ${turnTile.tileID} - Fit at degrees: ${fitDegrees.join(', ')}`);
-        } else {
-          console.log(`Checking tile (${board[tile.row][tile.col].tileID}) [${tile.row}, ${tile.col}] for tile ${turnTile.tileID} - No Fit`);
-        }
-        board[tile.row][tile.col].enabled = isAnyFit;
+        console.log(`Checking tile [${tile.row}, ${tile.col}] for tile ${turnTile.tileID} - Fit at degrees: ${fitDegrees.join(', ')}`);
+      } else {
+        console.log(`Checking tile [${tile.row}, ${tile.col}] for tile ${turnTile.tileID} - No Fit`);
+      }
+      board[tile.row][tile.col].enabled = isAnyFit;
+      board[tile.row][tile.col].fitments = fitments;
     });
   }
   if (userIds.length >= usersTurn + 1) {
