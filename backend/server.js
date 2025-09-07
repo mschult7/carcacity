@@ -9,8 +9,9 @@
 
 const express = require('express');
 const http = require('http');
-const { connected } = require('process');
 const { Server } = require('socket.io');
+const mysql = require('mysql2');
+const { json } = require('stream/consumers');
 
 /* =========================
  * Server and Socket Setup
@@ -21,6 +22,53 @@ const io = new Server(server, {
   path: '/cityapi',
   cors: { origin: 'https://panther01.ddns.net' },
 });
+/* =========================
+ * MySQL Tile Data & Land Type Enum Setup
+ * ========================= */
+
+const tile_data = {}; // tile_data[tileId][x][y] = land_type_id
+const land_type = {}; // land_type.name -> id
+const land_type_names = {}; // land_type.id -> name
+
+const db = mysql.createConnection({
+  host: 'mysql',
+  user: 'carcacity_svc',       // change as needed
+  password: 'carcacity_password',       // change as needed
+  database: 'carcacity_db'
+});
+
+function loadTileDataAndLandTypes() {
+  // Load land_types (enum table)
+  db.query('SELECT id, name FROM land_types', (err, results) => {
+    if (err) {
+      console.error('Error loading land_types:', err);
+      process.exit(1);
+    }
+    results.forEach(row => {
+      land_type[row.name] = row.id;
+      land_type_names[row.id] = row.name;
+    });
+    console.log('Loaded land_type enum:', land_type);
+
+    // Load tile_data (main map data)
+    db.query('SELECT tile_id, x, y, land_type_id FROM tile_data', (err, results) => {
+      if (err) {
+        console.error('Error loading tile_data:', err);
+        process.exit(1);
+      }
+      for (const row of results) {
+        const { tile_id, x, y, land_type_id } = row;
+        if (!tile_data[tile_id]) tile_data[tile_id] = {};
+        if (!tile_data[tile_id][x]) tile_data[tile_id][x] = {};
+        tile_data[tile_id][x][y] = land_type_id;
+      }
+      console.log(`Loaded ${results.length} tile_data cells into 3D lookup`);
+      db.end();
+    });
+  });
+}
+loadTileDataAndLandTypes();
+
 /* =========================
  * Rate Limiting (Per-IP)
  * ========================= */
@@ -494,7 +542,7 @@ io.on('connection', (socket) => {
 function clickTile(player, index, enabled, seq, color, row, col) {
   //console.log(player, index, enabled, seq, color, row, col);
 
-  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0, image: turnTile.image };
+  board[row][col] = { player: player, index: index, enabled: enabled, sequence: seq, color: color, row: row, col: col, count: 0,tileID: turnTile.tileID, image: turnTile.image };
   users[player].lastTile = [row, col];
 
   enableIfValid(row + 1, col);
@@ -634,6 +682,107 @@ function disableIfValid(r, c) {
     }
   }
 }
+function checkFitment(r, c, tile) {
+  // Returns an array of booleans for [0, 90, 180, 270] degree rotations
+  // tile: { tileID: Number, image: String }
+
+  if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return [false, false, false, false];
+  if (board[r][c].sequence !== null && board[r][c].sequence >= 0) return [false, false, false, false];
+
+  const tileID = tile.tileID;
+  if (!tile_data[tileID]) return [false, false, false, false];
+
+  const tileSize = Object.keys(tile_data[tileID]).length;
+
+  // Get constraints for each direction: [top, right, bottom, left]
+  // Each constraint is either null (no neighbor), or a required land_type_id
+  const constraints = [null, null, null, null];
+
+  // Above (top)
+  if (r > 0 && board[r - 1][c].tileID) {
+    const neighborID = board[r - 1][c].tileID;
+    const neighborRot = board[r - 1][c].rotation || 0;
+    constraints[0] = getEdgeLandType(neighborID, neighborRot, "bottom");
+    //console.log(`(${neighborID}) Top constraint for ${r},${c}: ${constraints[0]}`);
+  }
+  // Right
+  if (c < BOARD_SIZE - 1 && board[r][c + 1].tileID) {
+    const neighborID = board[r][c + 1].tileID;
+    const neighborRot = board[r][c + 1].rotation || 0;
+    constraints[1] = getEdgeLandType(neighborID, neighborRot, "left");
+    //console.log(`(${neighborID})Right constraint for ${r},${c}: ${constraints[1]}`);
+  }
+  // Below (bottom)
+  if (r < BOARD_SIZE - 1 && board[r + 1][c].tileID) {
+    const neighborID = board[r + 1][c].tileID;
+    const neighborRot = board[r + 1][c].rotation || 0;
+    constraints[2] = getEdgeLandType(neighborID, neighborRot, "top");
+    //console.log(`(${neighborID}) Bottom constraint for ${r},${c}: ${constraints[2]}`);
+  }
+  // Left
+  if (c > 0 && board[r][c - 1].tileID) {
+    const neighborID = board[r][c - 1].tileID;
+    const neighborRot = board[r][c - 1].rotation || 0;
+    constraints[3] = getEdgeLandType(neighborID, neighborRot, "right");
+    //console.log(` (${neighborID}) Left constraint for ${r},${c}: ${constraints[3]}`);
+  }
+
+  // Try each rotation
+  const rotations = [0, 90, 180, 270];
+  const result = [];
+  for (let i = 0; i < rotations.length; i++) {
+    let fits = true;
+    for (let dir = 0; dir < 4; dir++) {
+      if (constraints[dir] === null) continue; // no constraint
+      const thisTileEdge = getEdgeLandType(tileID, rotations[i], ["top", "right", "bottom", "left"][dir]);
+      //console.log(`Checking rotation ${rotations[i]} for ${tileID} ${["top", "right", "bottom", "left"][dir]}: ${thisTileEdge} === ${constraints[dir]}`);
+      if (thisTileEdge !== constraints[dir]) {
+        fits = false;
+        break;
+      }
+    }
+    result.push(fits);
+  }
+  return result;
+}
+
+// Helper to get the land_type_id of a given edge for a tileID and rotation
+function getEdgeLandType(tileID, rotation, edge) {
+  // edge: "top", "right", "bottom", "left"
+  // rotation: 0, 90, 180, 270
+  const N = Object.keys(tile_data[tileID]).length;
+  let edgeCells;
+  if (edge === "left") {
+    edgeCells = [];
+    for (let x = 0; x < N; x++) edgeCells.push([x, 0]);
+  } else if (edge === "right") {
+    edgeCells = [];
+    for (let x = 0; x < N; x++) edgeCells.push([x, N - 1]);
+  } else if (edge === "top") {
+    edgeCells = [];
+    for (let y = 0; y < N; y++) edgeCells.push([0, y]);
+  } else if (edge === "bottom") {
+    edgeCells = [];
+    for (let y = 0; y < N; y++) edgeCells.push([N - 1, y]);
+  }
+  edgeCells = edgeCells.map(([x, y]) => rotateCoord(x, y, N, rotation));
+  //console.log(`Edge cells for tile ${tileID} edge ${edge} at rotation ${rotation}:`, edgeCells);
+  const centerIdx = Math.floor(edgeCells.length / 2);
+  const [cx, cy] = edgeCells[centerIdx];
+  //console.log(`Center cell for ${edge} edge at rotation ${rotation}: (${cx}, ${cy})`);
+  //console.log(`TileData(${tileID}): ${JSON.stringify(tile_data[tileID], null, 2)}`);
+  //console.log(`tileID: ${tileID} | cx: ${cx} | cy: ${cy} | land_type: ${tile_data[tileID][cx][cy]}`);
+  return tile_data[tileID][cx][cy];
+}
+
+// Rotate coordinates in NxN grid
+function rotateCoord(x, y, N, rotation) {
+  if (rotation === 0) return [x, y];
+  if (rotation === 90) return [N - 1 - y, x];
+  if (rotation === 180) return [N - 1 - x, N - 1 - y];
+  if (rotation === 270) return [y, N - 1 - x];
+  return [x, y];
+}
 function checkRank(r, c, player) {
   if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
     if (board[r][c].sequence === null || board[r][c].sequence < 0) {
@@ -658,7 +807,7 @@ function clearBoard() {
     .map(() =>
       Array(BOARD_SIZE)
         .fill(null)
-        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null, tileId: null, image: null }))
+        .map(() => ({ player: null, index: null, enabled: false, sequence: null, rank: null, tileID: null, image: null }))
     );
 
   tileDeck = [];
@@ -837,16 +986,33 @@ function toggleTurn() {
   //console.log(JSON.stringify(enabledTiles, null, 2));
   //console.log(`lastUser: ${lastUser} | usersTurn: ${usersTurn} | userId: ${userIds[usersTurn]}`);
   const turnUserId = userIds[usersTurn];
-  enabledTiles.forEach(tile => {
-    checkRank(tile.row, tile.col, turnUserId);
-  });
+  turnTile = tileDeck.pop();
+
+  if(sequence > 0){
+      enabledTiles.forEach(tile => {
+        
+        checkRank(tile.row, tile.col, turnUserId);
+        const fitments = checkFitment(tile.row, tile.col, turnTile);
+        const isAnyFit = fitments.some(fits => fits);
+
+        if (isAnyFit) {
+        // Gather all degrees that fit
+        const fitDegrees = fitments
+          .map((fits, idx) => fits ? idx * 90 : null)
+          .filter(deg => deg !== null);
+        console.log(`Checking tile (${board[tile.row][tile.col].tileID}) [${tile.row}, ${tile.col}] for tile ${turnTile.tileID} - Fit at degrees: ${fitDegrees.join(', ')}`);
+        } else {
+          console.log(`Checking tile (${board[tile.row][tile.col].tileID}) [${tile.row}, ${tile.col}] for tile ${turnTile.tileID} - No Fit`);
+        }
+        board[tile.row][tile.col].enabled = isAnyFit;
+    });
+  }
   if (userIds.length >= usersTurn + 1) {
     if (lastUser >= 0) {
       const lastUserId = userIds[lastUser];
       users[lastUserId].isTurn = false;
     }
     users[turnUserId].isTurn = true;
-    turnTile = tileDeck.pop();
     io.emit('turn', {
       userName: users[turnUserId]?.name, // Pass only the user's name
       usersTurn: usersTurn, // Include the usersTurn variable
@@ -854,6 +1020,7 @@ function toggleTurn() {
       tileCount: tileDeck.length
     });
     io.emit('users', Object.entries(users).map(([id, u]) => ({ clientId: id, ...u })));
+    io.emit('boardUpdate', board);
   }
 }
 
