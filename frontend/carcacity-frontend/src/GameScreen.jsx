@@ -3,6 +3,7 @@ import Board from './Board.jsx';
 import { motion, AnimatePresence } from "framer-motion";
 import { getColor } from "./colors";
 import useLandscape from './useLandscape';
+import { socket } from './socket';
 
 const getBoardContainerStyle = () => ({
   position: 'relative',
@@ -57,6 +58,7 @@ const GameScreen = ({
   const [showGameOver, setShowGameOver] = useState(false);
   const [gameOverDisplayed, setGameOverDisplayed] = useState(false); // For menu UI
   const [winners, setWinners] = useState([]);
+  const [tilePlaced, setTilePlaced] = useState(false); // Track if tile has been placed
 
   // --- Long press detection state ---
   const longPressTimerRef = useRef(null);
@@ -65,6 +67,13 @@ const GameScreen = ({
   // Check if it's the current player's turn
   const isMyTurn = currentTurnPlayerName === playerName;
   const IMAGE_URL = "https://panther01.ddns.net/app/tiles/default/";
+  
+  // Reset tilePlaced when it's no longer the player's turn
+  useEffect(() => {
+    if (!isMyTurn) {
+      setTilePlaced(false);
+    }
+  }, [isMyTurn]);
 
   const openTileCount = () => {
     return tileOpened.filter(Boolean).length;
@@ -129,6 +138,11 @@ const GameScreen = ({
     } else {
       setConfirmEndGame(true);
     }
+  };
+
+  const handleConfirmTile = () => {
+    socket.emit('clickTile');
+    setTilePlaced(false);
   };
 
   // --- Long press handlers for overlay ---
@@ -370,12 +384,20 @@ const GameScreen = ({
       borderRadius: '4px',
       border: '1px solid #3b9774',
     }} />
-    <div style={{ 
-      color: '#fff', 
-      fontSize: '0.8rem',
-      textAlign: 'center'
-    }}>
-      Place Tile
+    <div 
+      style={{ 
+        color: '#fff', 
+        fontSize: '0.8rem',
+        textAlign: 'center',
+        cursor: tilePlaced ? 'pointer' : 'default',
+        padding: tilePlaced ? '0.25rem 0.5rem' : '0',
+        backgroundColor: tilePlaced ? '#3b9774' : 'transparent',
+        borderRadius: tilePlaced ? '4px' : '0',
+        border: tilePlaced ? '1px solid #3b9774' : 'none'
+      }}
+      onClick={tilePlaced ? handleConfirmTile : undefined}
+    >
+      {tilePlaced ? 'Confirm' : 'Place Tile'}
     </div>
   </div>
 )}
@@ -446,6 +468,7 @@ const GameScreen = ({
           containerHeight={containerSize.height}
           isSpectator={isSpectator}
           checkMate={checkMate}
+          onTilePlaced={() => setTilePlaced(true)}
         />
       </div>
     </div>
