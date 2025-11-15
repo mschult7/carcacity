@@ -243,7 +243,7 @@ const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobb
         >
           Add Robot
         </button>
-        {/* Board Size Slider (odd values 3..49) */}
+        {/* Board Size Slider (odd values 3..49)
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           <label htmlFor="board-size" style={{ color: '#fff', fontWeight: 'bold' }}>
             Board size: <span style={{ color: '#3b9774' }}>{effectiveBoardSize} × {effectiveBoardSize}</span>
@@ -264,7 +264,7 @@ const Lobby = ({ players, onSaveName, onExit, clientId, currentName, animateLobb
             }}
           />
           <small style={{ color: '#bbb' }}>Only odd values between 3 and 49.</small>
-        </div>
+        </div> */}
       </motion.div>
     </div>
   );

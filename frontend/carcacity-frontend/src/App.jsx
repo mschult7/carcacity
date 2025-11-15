@@ -96,7 +96,8 @@ const App = () => {
     };
 
     const handleTurn = (turnData) => {
-      setCurrentTurnTile(turnData.tile);
+      var tile = turnData.tile || null;
+      setCurrentTurnTile({tileID: tile.tileID, image: tile.image, rotation: turnData.rotation});
       setCurrentTurnPlayerName(turnData.userName || turnData.name || "");
     };
 
@@ -116,6 +117,7 @@ const App = () => {
 
       socket.emit("list"); // request the latest list of users
       socket.emit("status"); // request the latest list of users
+      socket.emit("getTurn"); // request the latest turn information
     });
     const interval = setInterval(() => {
       if (clientId) {
@@ -146,6 +148,7 @@ const App = () => {
     const interval = setInterval(() => {
       
       socket.emit("list");
+      socket.emit("getTurn");
       socket.emit("getBoard");
       socket.emit("getBoardSize");
     }, 500);
@@ -200,6 +203,7 @@ const App = () => {
     setScreen("game");
     socket.emit("getBoard");
     socket.emit("list");
+    socket.emit("getTurn");
   };
   const addRobot = () => {
     socket.emit("robot");

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { socket } from './socket';
 import { playerColors, defaultColors } from "./colors";
-import { MotionConfig, motion } from 'framer-motion';
+import { MotionConfig, motion, transform } from 'framer-motion';
 const Board = forwardRef(({ clientID, currentPlayer, players, containerWidth = 500, containerHeight = 500, isSpectator, checkMate, onTilePlaced }, ref) => {
 
   const [size, setSize] = useState(21);
@@ -305,11 +305,12 @@ Usage:
       let isLastPlayedTile = false;
       const player = players.find(p => p.clientId === tile.player);
       if (player) {
-
+        //console.log(`Last played tile for ${player.name}: ${player.lastTile}`);
         if (
           player.lastTile[0] === tile.row &&
           player.lastTile[1] === tile.col
         ) {
+  
           isLastPlayedTile = true;
         }
       }
@@ -324,6 +325,7 @@ Usage:
           cursor: "not-allowed",
           border: "none",
           borderRadius: "0",
+          transform: `rotate(${tile.rotation * 90}deg)`,
         };
       }
       return {
@@ -340,6 +342,7 @@ Usage:
         cursor: "not-allowed",
         border: "none",
         borderRadius: "0",
+        transform: `rotate(${tile.rotation * 90}deg)`
       };
 
     }

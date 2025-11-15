@@ -67,7 +67,7 @@ const GameScreen = ({
   // Check if it's the current player's turn
   const isMyTurn = currentTurnPlayerName === playerName;
   const IMAGE_URL = "https://panther01.ddns.net/app/tiles/default/";
-  
+
   // Reset tilePlaced when it's no longer the player's turn
   useEffect(() => {
     if (!isMyTurn) {
@@ -144,7 +144,10 @@ const GameScreen = ({
     socket.emit('clickTile');
     setTilePlaced(false);
   };
-
+  const handleRotateTile = () => {
+    //console.log('Rotating tile'); 
+    socket.emit('rotate');
+  };
   // --- Long press handlers for overlay ---
   const handleGameOverPointerDown = () => {
     setIsPressing(true);
@@ -346,61 +349,63 @@ const GameScreen = ({
           ))}
         </div>
 
-      {/* Current Turn Tile */}
-{isMyTurn && currentTurnTile && gameStarted && !isSpectator && (
-  <div
-    style={{
-      pointerEvents: 'auto',
-      background: 'rgba(0,0,0,0.8)',
-      borderRadius: '8px',
-      padding: '0.75rem',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-      position: 'fixed', // <-- changed from static/absolute
-      bottom: '1.5rem',  // <-- anchor to bottom
-      right: '1.5rem',   // <-- anchor to right
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '0.5rem',
-      border: '2px solid #3b9774',
-      zIndex: 20, // keep above board
-    }}
-  >
-    <div style={{ 
-      color: '#3b9774', 
-      fontWeight: 'bold', 
-      fontSize: '0.9rem',
-      textAlign: 'center'
-    }}>
-      Your Turn
-    </div>
-    <div style={{
-      width: '60px',
-      height: '60px',
-      backgroundImage: `url(${IMAGE_URL}${currentTurnTile.image})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      borderRadius: '4px',
-      border: '1px solid #3b9774',
-    }} />
-    <div 
-      style={{ 
-        color: '#fff', 
-        fontSize: '0.8rem',
-        textAlign: 'center',
-        cursor: tilePlaced ? 'pointer' : 'default',
-        padding: tilePlaced ? '0.25rem 0.5rem' : '0',
-        backgroundColor: tilePlaced ? '#3b9774' : 'transparent',
-        borderRadius: tilePlaced ? '4px' : '0',
-        border: tilePlaced ? '1px solid #3b9774' : 'none'
-      }}
-      onClick={tilePlaced ? handleConfirmTile : undefined}
-    >
-      {tilePlaced ? 'Confirm' : 'Place Tile'}
-    </div>
-  </div>
-)}
+        {/* Current Turn Tile */}
+        {isMyTurn && currentTurnTile && gameStarted && !isSpectator && (
+          <div
+            style={{
+              pointerEvents: 'auto',
+              background: 'rgba(0,0,0,0.8)',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+              position: 'fixed', // <-- changed from static/absolute
+              bottom: '1.5rem',  // <-- anchor to bottom
+              right: '1.5rem',   // <-- anchor to right
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.5rem',
+              border: '2px solid #3b9774',
+              zIndex: 20, // keep above board
+            }}
+          >
+            <div style={{
+              color: '#3b9774',
+              fontWeight: 'bold',
+              fontSize: '0.9rem',
+              textAlign: 'center'
+            }}>
+              Your Turn
+            </div>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              backgroundImage: `url(${IMAGE_URL}${currentTurnTile.image})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              borderRadius: '4px',
+              border: '1px solid #3b9774',
+              transform: `rotate(${currentTurnTile.rotation * 90}deg)`,
+            }}
+            onClick={handleRotateTile} />
+            <div
+              style={{
+                color: '#fff',
+                fontSize: '0.8rem',
+                textAlign: 'center',
+                cursor: tilePlaced ? 'pointer' : 'default',
+                padding: tilePlaced ? '0.25rem 0.5rem' : '0',
+                backgroundColor: tilePlaced ? '#3b9774' : 'transparent',
+                borderRadius: tilePlaced ? '4px' : '0',
+                border: tilePlaced ? '1px solid #3b9774' : 'none'
+              }}
+              onClick={tilePlaced ? handleConfirmTile : undefined}
+            >
+              {tilePlaced ? 'Confirm' : 'Place Tile'}
+            </div>
+          </div>
+        )}
 
         {/* Menu */}
         <div
